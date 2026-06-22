@@ -1,0 +1,17 @@
+.env
+.agents/
+.codex/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+storage/*
+!storage/.gitkeep
+!storage/templates/
+!storage/generated/
+!storage/previews/
+storage/templates/*
+storage/generated/*
+storage/previews/*
+КП от Кристины.pdf
+*.log

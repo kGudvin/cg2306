@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Генератор КП</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <div id="login" class="login-screen">
+      <section class="login-panel">
+        <div>
+          <p class="eyebrow">Коммерческие предложения</p>
+          <h1>Генератор КП</h1>
+          <p class="muted">Вход доступен только разрешенным пользователям.</p>
+        </div>
+        <div id="googleButton"></div>
+        <form id="devLoginForm" class="dev-login hidden">
+          <label>Email для локального входа</label>
+          <div class="inline">
+            <input id="devEmail" type="email" placeholder="admin@example.com" />
+            <button type="submit">Войти</button>
+          </div>
+        </form>
+        <p id="loginError" class="error"></p>
+      </section>
+    </div>
+
+    <div id="app" class="app hidden">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">КП</span>
+          <div>
+            <strong>Генератор КП</strong>
+            <small id="userLine"></small>
+          </div>
+        </div>
+        <nav>
+          <button class="nav active" data-view="proposals">Мои КП</button>
+          <button class="nav" data-view="editor">Создание КП</button>
+          <button class="nav hidden" data-view="admin" id="adminNav">Админ-панель</button>
+        </nav>
+        <button id="logoutBtn" class="ghost">Выйти</button>
+      </aside>
+
+      <main class="workspace">
+        <section id="view-proposals" class="view">
+          <header class="view-head">
+            <div>
+              <p class="eyebrow">История</p>
+              <h2>Коммерческие предложения</h2>
+            </div>
+            <button id="newProposalBtn">Создать КП</button>
+          </header>
+          <div id="proposalList" class="proposal-list"></div>
+        </section>
+
+        <section id="view-editor" class="view hidden">
+          <header class="view-head">
+            <div>
+              <p class="eyebrow" id="editorMode">Новое КП</p>
+              <h2>Форма коммерческого предложения</h2>
+            </div>
+            <div class="actions">
+              <button id="saveBtn">Сохранить</button>
+              <button id="duplicateBtn" class="secondary" disabled>Дублировать</button>
+              <button id="deleteBtn" class="danger" disabled>Удалить</button>
+            </div>
+          </header>
+
+          <div class="editor-grid">
+            <form id="proposalForm" class="form-panel">
+              <fieldset>
+                <legend>Шаблон и адресат</legend>
+                <label>Шаблон</label>
+                <select id="templateId"></select>
+                <label>Полное наименование организации</label>
+                <input id="recipientName" required />
+                <div class="two">
+                  <label>ИНН<input id="recipientInn" /></label>
+                  <label>Регистр адресата<select id="recipientUppercase"><option value="false">Как введено</option><option value="true">Заглавными буквами</option></select></label>
+                </div>
+                <label>Адрес</label>
+                <textarea id="recipientAddress" rows="2"></textarea>
+              </fieldset>
+
+              <fieldset>
+                <legend>Номер, дата и основание</legend>
+                <div class="three">
+                  <label>Дата КП<input id="quoteDate" type="date" required /></label>
+                  <label>Номер между слешами<input id="outgoingMiddle" placeholder="например 15" /></label>
+                  <label>Исходящий номер<input id="outgoingPreview" readonly /></label>
+                </div>
+                <label>Основание</label>
+                <select id="requestType">
+                  <option value="without_request">КП без номера запроса</option>
+                  <option value="with_request">КП по запросу</option>
+                </select>
+                <div id="requestFields" class="two hidden">
+                  <label>Номер запроса<input id="requestNumber" /></label>
+                  <label>Дата запроса<input id="requestDate" type="date" /></label>
+                </div>
+                <label>Основной текст</label>
+                <textarea id="introText" rows="4"></textarea>
+              </fieldset>
+
+              <fieldset>
+                <legend>Товары</legend>
+                <div class="table-wrap">
+                  <table class="items-table">
+                    <thead>
+                      <tr>
+                        <th>№</th>
+                        <th>Наименование</th>
+                        <th>Ед.</th>
+                        <th>Кол-во</th>
+                        <th>Цена с НДС</th>
+                        <th>Сумма</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="itemsBody"></tbody>
+                  </table>
+                </div>
+                <button type="button" id="addItemBtn" class="secondary">Добавить строку</button>
+                <div class="totals">
+                  <span>Итого: <strong id="totalAmount">0,00</strong></span>
+                  <span>НДС 22%: <strong id="vatAmount">0,00</strong></span>
+                  <span id="totalWords"></span>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Сроки и условия</legend>
+                <div class="three">
+                  <label>Срок поставки<input id="deliveryTermValue" type="number" min="1" value="45" /></label>
+                  <label>Тип дней<select id="deliveryTermUnit"><option value="working_days">Рабочие дни</option><option value="calendar_days">Календарные дни</option></select></label>
+                  <label>Гарантия, мес.<input id="warrantyMonths" type="number" min="0" value="12" /></label>
+                </div>
+                <label>Срок действия КП<input id="validUntil" type="date" /></label>
+                <label>Условия оплаты<textarea id="paymentTerms" rows="2"></textarea></label>
+                <label>Условия доставки<textarea id="deliveryTerms" rows="2"></textarea></label>
+                <label>Место поставки<textarea id="deliveryPlace" rows="2"></textarea></label>
+                <label>Текст приложения / спецификации<textarea id="specificationText" rows="3"></textarea></label>
+              </fieldset>
+            </form>
+
+            <aside class="preview-panel">
+              <div class="preview-actions">
+                <button id="previewBtn" disabled>Обновить предпросмотр</button>
+                <button id="generateBtn" disabled>Сгенерировать DOCX и PDF</button>
+              </div>
+              <div class="download-actions">
+                <a id="docxLink" class="download hidden" target="_blank">Скачать DOCX</a>
+                <a id="pdfLink" class="download hidden" target="_blank">Скачать PDF</a>
+              </div>
+              <iframe id="pdfPreview" title="PDF-предпросмотр"></iframe>
+            </aside>
+          </div>
+        </section>
+
+        <section id="view-admin" class="view hidden">
+          <header class="view-head">
+            <div>
+              <p class="eyebrow">Администрирование</p>
+              <h2>Пользователи и доступ</h2>
+            </div>
+          </header>
+          <div class="admin-grid">
+            <section class="admin-panel">
+              <h3>Разрешенные email</h3>
+              <form id="allowedEmailForm" class="inline">
+                <input id="allowedEmail" type="email" placeholder="manager@example.com" />
+                <select id="allowedRole"><option value="manager">Менеджер</option><option value="admin">Администратор</option></select>
+                <button>Добавить</button>
+              </form>
+              <div id="allowedList"></div>
+            </section>
+            <section class="admin-panel">
+              <h3>Пользователи</h3>
+              <div id="usersList"></div>
+            </section>
+            <section class="admin-panel">
+              <h3>Шаблоны</h3>
+              <form id="templateUploadForm">
+                <label>Название шаблона<input id="templateName" value="КП ООО «Бештау Электроникс»" /></label>
+                <label>Организация<input id="templateOrg" value="ООО «Бештау Электроникс»" /></label>
+                <label>DOCX-шаблон<input id="templateFile" type="file" accept=".docx" /></label>
+                <button>Загрузить шаблон</button>
+              </form>
+              <div id="templateList"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>
