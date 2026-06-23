@@ -11,6 +11,7 @@
 {{quote_date}}
 {{recipient_name}}
 {{recipient_inn}}
+{{recipient_email}}
 {{recipient_address}}
 {{intro_text}}
 {{specification_text}}

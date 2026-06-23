@@ -11,7 +11,7 @@ from docx.oxml.ns import qn
 
 from app.config import get_settings
 from app.models import Proposal
-from app.services.money import format_money, format_numeric_date, format_ru_date, sanitize_filename_part
+from app.services.money import format_money, format_numeric_date, format_ru_date
 
 
 DEFAULT_SPECIFICATION_TEXT = (
@@ -63,6 +63,7 @@ def is_auto_intro_text(candidate: str | None, proposal: Proposal) -> bool:
 def proposal_context(proposal: Proposal) -> dict[str, str]:
     recipient = proposal.recipient_name.upper() if proposal.recipient_uppercase else proposal.recipient_name
     delivery_unit = "рабочих дней" if proposal.delivery_term_unit == "working_days" else "календарных дней"
+    delivery_term = f"{proposal.delivery_term_value} {delivery_unit}" if proposal.delivery_term_value else ""
     optional_conditions = []
     if proposal.payment_terms:
         optional_conditions.append(f"Условия оплаты: {proposal.payment_terms}")
@@ -74,12 +75,13 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
     return {
         "recipient_name": recipient,
         "recipient_inn": proposal.recipient_inn or "",
+        "recipient_email": proposal.recipient_email or "",
         "recipient_address": proposal.recipient_address or "",
         "quote_date": format_ru_date(proposal.quote_date),
         "outgoing_number": proposal.outgoing_number,
         "intro_text": proposal.intro_text or default_intro_text(proposal),
         "specification_text": proposal.specification_text,
-        "delivery_term": f"{proposal.delivery_term_value} {delivery_unit}",
+        "delivery_term": delivery_term,
         "warranty": f"{proposal.warranty_months} мес.",
         "valid_until": format_ru_date(proposal.valid_until),
         "payment_terms": proposal.payment_terms or "",
@@ -147,6 +149,10 @@ def _paragraph_has_only_placeholder(paragraph, key: str) -> bool:
     return text == "{{" + key + "}}"
 
 
+def _paragraph_contains_placeholder(paragraph, key: str) -> bool:
+    return "{{" + key + "}}" in paragraph.text
+
+
 def _remove_paragraph(paragraph) -> None:
     element = paragraph._element
     element.getparent().remove(element)
@@ -165,6 +171,16 @@ def _remove_empty_block_placeholders(doc: Document, context: dict[str, str]) -> 
                 for cell in row.cells:
                     for paragraph in list(cell.paragraphs):
                         if _paragraph_has_only_placeholder(paragraph, key):
+                            _remove_paragraph(paragraph)
+    if context.get("delivery_term", "") == "":
+        for paragraph in list(doc.paragraphs):
+            if _paragraph_contains_placeholder(paragraph, "delivery_term"):
+                _remove_paragraph(paragraph)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in list(cell.paragraphs):
+                        if _paragraph_contains_placeholder(paragraph, "delivery_term"):
                             _remove_paragraph(paragraph)
 
 
@@ -187,7 +203,7 @@ def _row_has_item_placeholders(row: _Row) -> bool:
 def _row_context(item, index: int) -> dict[str, str]:
     return {
         "item_no": str(index),
-        "item_name": item.name,
+        "item_name": item.display_name or item.name,
         "item_unit": item.unit,
         "item_quantity": str(item.quantity),
         "item_unit_price": format_money(item.unit_price_vat),
@@ -213,11 +229,26 @@ def _replace_items_table(doc: Document, proposal: Proposal) -> None:
         return
 
 
+def _filename_part(value: str | None, fallback: str, max_len: int = 80) -> str:
+    invalid_chars = set(r'\/:*?"<>|')
+    cleaned = "".join("-" if char in invalid_chars else char for char in str(value or fallback))
+    cleaned = " ".join(cleaned.split()).strip(" .,-")
+    return (cleaned[:max_len].strip(" .,-") or fallback)
+
+
+def _output_stem(proposal: Proposal, suffix: str = "") -> str:
+    template_name = getattr(getattr(proposal.template_version, "template", None), "name", None)
+    parts = [
+        _filename_part(template_name, "Шаблон"),
+        _filename_part(proposal.recipient_name, "Адресат"),
+        _filename_part(proposal.outgoing_number, "без номера", max_len=40),
+    ]
+    return f"{', '.join(parts)}{suffix}"
+
+
 def _make_output_paths(proposal: Proposal, suffix: str = "") -> tuple[Path, Path]:
     settings = get_settings()
-    clean_recipient = sanitize_filename_part(proposal.recipient_name)
-    date_part = proposal.quote_date.strftime("%Y-%m-%d")
-    stem = f"КП_{clean_recipient}_{date_part}{suffix}"
+    stem = _output_stem(proposal, suffix=suffix)
     proposal_dir = settings.generated_dir / str(proposal.id)
     proposal_dir.mkdir(parents=True, exist_ok=True)
     return proposal_dir / f"{stem}.docx", proposal_dir / f"{stem}.pdf"

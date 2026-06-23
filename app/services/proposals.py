@@ -38,7 +38,10 @@ def latest_template_version(db: Session, template_id: int) -> TemplateVersion:
 def get_proposal_for_user(db: Session, proposal_id: int, user: User) -> Proposal:
     proposal = db.scalar(
         select(Proposal)
-        .options(selectinload(Proposal.items), selectinload(Proposal.template_version))
+        .options(
+            selectinload(Proposal.items),
+            selectinload(Proposal.template_version).selectinload(TemplateVersion.template),
+        )
         .where(Proposal.id == proposal_id)
     )
     if proposal is None:
@@ -65,6 +68,7 @@ def fill_proposal(proposal: Proposal, data: ProposalIn, db: Session, keep_templa
     proposal.template_id = data.template_id
     proposal.recipient_name = data.recipient_name.strip()
     proposal.recipient_inn = data.recipient_inn
+    proposal.recipient_email = data.recipient_email
     proposal.recipient_address = data.recipient_address
     proposal.recipient_uppercase = data.recipient_uppercase
     proposal.quote_date = data.quote_date
@@ -84,10 +88,15 @@ def fill_proposal(proposal: Proposal, data: ProposalIn, db: Session, keep_templa
 
     proposal.items.clear()
     for index, item in enumerate(data.items, start=1):
+        display_name = (item.display_name or item.name or "").strip()
+        product_name = (item.product_name or display_name).strip() or None
         proposal.items.append(
             ProposalItem(
                 sort_order=index,
-                name=item.name,
+                name=display_name,
+                registry_number=item.registry_number.strip() if item.registry_number else None,
+                product_name=product_name,
+                display_name=display_name,
                 unit=item.unit,
                 quantity=item.quantity,
                 unit_price_vat=item.unit_price_vat,
@@ -133,6 +142,7 @@ def duplicate_proposal(db: Session, proposal: Proposal, user: User) -> Proposal:
         template_version_id=proposal.template_version_id,
         recipient_name=proposal.recipient_name,
         recipient_inn=proposal.recipient_inn,
+        recipient_email=proposal.recipient_email,
         recipient_address=proposal.recipient_address,
         recipient_uppercase=proposal.recipient_uppercase,
         quote_date=today,
@@ -156,6 +166,9 @@ def duplicate_proposal(db: Session, proposal: Proposal, user: User) -> Proposal:
             ProposalItem(
                 sort_order=item.sort_order,
                 name=item.name,
+                registry_number=item.registry_number,
+                product_name=item.product_name,
+                display_name=item.display_name or item.name,
                 unit=item.unit,
                 quantity=item.quantity,
                 unit_price_vat=item.unit_price_vat,

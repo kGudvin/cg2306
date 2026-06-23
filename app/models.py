@@ -30,6 +30,7 @@ class AuditAction(str, enum.Enum):
     proposal_generated = "proposal_generated"
     proposal_deleted = "proposal_deleted"
     template_uploaded = "template_uploaded"
+    registry_imported = "registry_imported"
     user_blocked = "user_blocked"
 
 
@@ -94,6 +95,7 @@ class Proposal(Base):
 
     recipient_name: Mapped[str] = mapped_column(String(500))
     recipient_inn: Mapped[str | None] = mapped_column(String(32))
+    recipient_email: Mapped[str | None] = mapped_column(String(255))
     recipient_address: Mapped[str | None] = mapped_column(Text)
     recipient_uppercase: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -104,7 +106,7 @@ class Proposal(Base):
     request_number: Mapped[str | None] = mapped_column(String(128))
     request_date: Mapped[date | None] = mapped_column(Date)
 
-    delivery_term_value: Mapped[int] = mapped_column(Integer, default=45)
+    delivery_term_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     delivery_term_unit: Mapped[str] = mapped_column(String(32), default="working_days")
     warranty_months: Mapped[int] = mapped_column(Integer, default=12)
     valid_until: Mapped[date] = mapped_column(Date)
@@ -140,12 +142,26 @@ class ProposalItem(Base):
     proposal_id: Mapped[int] = mapped_column(ForeignKey("proposals.id", ondelete="CASCADE"), index=True)
     sort_order: Mapped[int] = mapped_column(Integer)
     name: Mapped[str] = mapped_column(Text)
+    registry_number: Mapped[str | None] = mapped_column(String(128))
+    product_name: Mapped[str | None] = mapped_column(Text)
+    display_name: Mapped[str | None] = mapped_column(Text)
     unit: Mapped[str] = mapped_column(String(32), default="шт.")
     quantity: Mapped[int] = mapped_column(Integer)
     unit_price_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     line_total: Mapped[Decimal] = mapped_column(Numeric(14, 2))
 
     proposal: Mapped[Proposal] = relationship(back_populates="items")
+
+
+class RegistryProduct(Base):
+    __tablename__ = "registry_products"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    registry_number: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    name: Mapped[str] = mapped_column(Text)
+    source_file_name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class AuditLog(Base):

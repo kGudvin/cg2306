@@ -213,6 +213,9 @@ input, textarea, select {
   padding: 9px 10px;
   color: var(--text);
   background: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.4;
 }
 textarea { resize: vertical; }
 .two {
@@ -234,7 +237,7 @@ textarea { resize: vertical; }
 .items-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 780px;
+  min-width: 980px;
 }
 .items-table th, .items-table td {
   border-bottom: 1px solid var(--line);
@@ -248,11 +251,21 @@ textarea { resize: vertical; }
   color: #34434b;
 }
 .items-table td:first-child { width: 42px; text-align: center; }
-.items-table td:nth-child(3) { width: 90px; }
+.items-table td:nth-child(2) { width: 150px; }
 .items-table td:nth-child(4) { width: 90px; }
-.items-table td:nth-child(5), .items-table td:nth-child(6) { width: 140px; }
+.items-table td:nth-child(5) { width: 90px; }
+.items-table td:nth-child(6), .items-table td:nth-child(7) { width: 140px; }
 .items-table td:last-child { width: 48px; }
-.items-table input { padding: 7px; }
+.items-table input, .items-table textarea { padding: 7px; }
+.item-name { min-height: 68px; resize: vertical; }
+.registry-status {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.registry-status.ok { color: var(--accent); }
+.registry-status.error { color: var(--danger); }
 .row-total {
   white-space: nowrap;
   font-weight: 700;
@@ -286,6 +299,12 @@ textarea { resize: vertical; }
   gap: 18px;
 }
 .admin-panel h3 { margin-top: 0; }
+.admin-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-line;
+}
 .admin-row {
   display: grid;
   grid-template-columns: 1fr auto;

@@ -4,12 +4,12 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.models import AllowedEmail, AuditAction, AuditLog, Proposal, Template, TemplateVersion, User, UserRole
+from app.models import AllowedEmail, AuditAction, AuditLog, Proposal, RegistryProduct, Template, TemplateVersion, User, UserRole
 from app.schemas import (
     AllowedEmailIn,
     AllowedEmailRead,
@@ -18,6 +18,8 @@ from app.schemas import (
     GoogleLoginRequest,
     ProposalIn,
     ProposalRead,
+    RegistryImportResult,
+    RegistryProductRead,
     TemplateRead,
     TokenResponse,
     UserRead,
@@ -33,10 +35,51 @@ from app.services.proposals import (
     get_proposal_for_user,
     update_proposal,
 )
+from app.services.registry import display_name_for_registry_product, import_registry_products
 from app.template_seed import create_demo_beshtau_template, prepare_beshtau_template_from_source
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
+
+
+def apply_schema_compatibility() -> None:
+    inspector = inspect(engine)
+    if inspector.has_table("proposals"):
+        proposal_columns = {column["name"] for column in inspector.get_columns("proposals")}
+        if "recipient_email" not in proposal_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE proposals ADD COLUMN recipient_email VARCHAR(255)"))
+    if inspector.has_table("proposal_items"):
+        item_columns = {column["name"] for column in inspector.get_columns("proposal_items")}
+        with engine.begin() as connection:
+            if "registry_number" not in item_columns:
+                connection.execute(text("ALTER TABLE proposal_items ADD COLUMN registry_number VARCHAR(128)"))
+            if "product_name" not in item_columns:
+                connection.execute(text("ALTER TABLE proposal_items ADD COLUMN product_name TEXT"))
+            if "display_name" not in item_columns:
+                connection.execute(text("ALTER TABLE proposal_items ADD COLUMN display_name TEXT"))
+    if engine.dialect.name == "sqlite" and inspector.has_table("proposals"):
+        proposal_columns = inspector.get_columns("proposals")
+        proposal_indexes = inspector.get_indexes("proposals")
+        delivery_column = next((column for column in proposal_columns if column["name"] == "delivery_term_value"), None)
+        if delivery_column and not delivery_column.get("nullable", True):
+            with engine.begin() as connection:
+                connection.execute(text("PRAGMA foreign_keys=OFF"))
+                for index in proposal_indexes:
+                    connection.execute(text(f"DROP INDEX IF EXISTS {index['name']}"))
+                connection.execute(text("ALTER TABLE proposals RENAME TO proposals_old"))
+                Proposal.__table__.create(bind=connection)
+                new_columns = {column.name for column in Proposal.__table__.columns}
+                old_columns = {column["name"] for column in proposal_columns}
+                copy_columns = [column for column in Proposal.__table__.columns.keys() if column in old_columns and column in new_columns]
+                column_sql = ", ".join(copy_columns)
+                connection.execute(text(f"INSERT INTO proposals ({column_sql}) SELECT {column_sql} FROM proposals_old"))
+                connection.execute(text("DROP TABLE proposals_old"))
+                connection.execute(text("PRAGMA foreign_keys=ON"))
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE IF EXISTS proposals ALTER COLUMN delivery_term_value DROP NOT NULL"))
 
 
 def proposal_read(proposal: Proposal) -> ProposalRead:
@@ -82,6 +125,7 @@ def seed_initial_data(db: Session) -> None:
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    apply_schema_compatibility()
     with SessionLocal() as db:
         seed_initial_data(db)
         delete_expired_proposals(db)
@@ -151,6 +195,37 @@ def upload_template(
     db.add(AuditLog(user_id=user.id, action=AuditAction.template_uploaded, entity_type="template", entity_id=template.id))
     db.commit()
     return TemplateRead(id=template.id, name=template.name, organization=template.organization, is_active=True, latest_version_id=version.id)
+
+
+@app.post("/api/admin/registry-products/import", response_model=RegistryImportResult)
+def import_registry_products_endpoint(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> RegistryImportResult:
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Можно загрузить только XLSX")
+    stats = import_registry_products(db, file.file.read(), file.filename)
+    db.add(AuditLog(user_id=user.id, action=AuditAction.registry_imported, entity_type="registry_products", details=file.filename))
+    db.commit()
+    return RegistryImportResult(created=stats.created, updated=stats.updated, skipped=stats.skipped, errors=stats.errors)
+
+
+@app.get("/api/registry-products/by-number/{registry_number}", response_model=RegistryProductRead)
+def get_registry_product_by_number(
+    registry_number: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> RegistryProductRead:
+    normalized = registry_number.strip()
+    product = db.scalar(select(RegistryProduct).where(RegistryProduct.registry_number == normalized))
+    if product is None:
+        raise HTTPException(status_code=404, detail="Реестровый номер не найден")
+    return RegistryProductRead(
+        registry_number=product.registry_number,
+        name=product.name,
+        display_name=display_name_for_registry_product(product.name, product.registry_number),
+    )
 
 
 @app.get("/api/proposals", response_model=list[ProposalRead])

@@ -72,15 +72,21 @@
           <div class="editor-grid">
             <form id="proposalForm" class="form-panel">
               <fieldset>
-                <legend>Шаблон и адресат</legend>
+                <legend>Шаблон</legend>
                 <label>Шаблон</label>
                 <select id="templateId"></select>
+              </fieldset>
+
+              <fieldset>
+                <legend>Адресат</legend>
                 <label>Полное наименование организации</label>
                 <input id="recipientName" required />
                 <div class="two">
-                  <label>ИНН<input id="recipientInn" /></label>
+                  <label>ИНН<input id="recipientInn" inputmode="numeric" maxlength="12" pattern="\d{10}|\d{12}" /></label>
                   <label>Регистр адресата<select id="recipientUppercase"><option value="false">Как введено</option><option value="true">Заглавными буквами</option></select></label>
                 </div>
+                <label>Email</label>
+                <input id="recipientEmail" type="email" placeholder="name@example.com" />
                 <label>Адрес</label>
                 <textarea id="recipientAddress" rows="2"></textarea>
               </fieldset>
@@ -112,6 +118,7 @@
                     <thead>
                       <tr>
                         <th>№</th>
+                        <th>Реестровый номер</th>
                         <th>Наименование</th>
                         <th>Ед.</th>
                         <th>Кол-во</th>
@@ -134,10 +141,10 @@
               <fieldset>
                 <legend>Сроки и условия</legend>
                 <div class="three">
-                  <label>Срок поставки<input id="deliveryTermValue" type="number" min="1" value="45" /></label>
+                  <label>Срок поставки<input id="deliveryTermValue" type="number" min="1" placeholder="не указывать" /></label>
                   <label>Тип дней<select id="deliveryTermUnit"><option value="working_days">Рабочие дни</option><option value="calendar_days">Календарные дни</option></select></label>
-                  <label>Гарантия, мес.<input id="warrantyMonths" type="number" min="0" value="12" /></label>
                 </div>
+                <label>Гарантия, мес.<input id="warrantyMonths" type="number" min="0" value="12" /></label>
                 <label>Срок действия КП<input id="validUntil" type="date" /></label>
                 <label>Условия оплаты<textarea id="paymentTerms" rows="2"></textarea></label>
                 <label>Условия доставки<textarea id="deliveryTerms" rows="2"></textarea></label>
@@ -190,6 +197,14 @@
                 <button>Загрузить шаблон</button>
               </form>
               <div id="templateList"></div>
+            </section>
+            <section class="admin-panel">
+              <h3>Реестр товаров</h3>
+              <form id="registryUploadForm">
+                <label>Excel-файл реестра<input id="registryFile" type="file" accept=".xlsx" /></label>
+                <button>Загрузить реестр товаров</button>
+              </form>
+              <div id="registryImportResult" class="admin-note"></div>
             </section>
           </div>
         </section>

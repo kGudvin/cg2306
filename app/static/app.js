@@ -82,6 +82,62 @@ function sameText(left, right) {
   return String(left || "").trim().replace(/\s+/g, " ") === String(right || "").trim().replace(/\s+/g, " ");
 }
 
+function isValidInn(value) {
+  if (!value) return true;
+  if (!/^\d{10}$|^\d{12}$/.test(value)) return false;
+  const digits = [...value].map(Number);
+  const checksum = (weights, length) => weights.reduce((sum, weight, index) => sum + weight * digits[index], 0) % 11 % 10 === digits[length - 1];
+  if (digits.length === 10) return checksum([2, 4, 10, 3, 5, 9, 4, 6, 8], 10);
+  return checksum([7, 2, 4, 10, 3, 5, 9, 4, 6, 8], 11) && checksum([3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8], 12);
+}
+
+function isValidEmail(value) {
+  return !value || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+}
+
+function keepDigitsOnly(input, maxLength) {
+  input.value = input.value.replace(/\D/g, "").slice(0, maxLength);
+}
+
+function setRegistryStatus(row, message, kind = "") {
+  const status = row.querySelector(".registry-status");
+  status.textContent = message;
+  status.classList.toggle("ok", kind === "ok");
+  status.classList.toggle("error", kind === "error");
+}
+
+function scheduleRegistryLookup(row) {
+  clearTimeout(row.registryLookupTimer);
+  row.registryLookupTimer = setTimeout(() => lookupRegistryProduct(row), 450);
+}
+
+async function lookupRegistryProduct(row) {
+  const input = row.querySelector(".item-registry-number");
+  const number = input.value.trim();
+  if (!number) {
+    row.dataset.registryNumber = "";
+    row.dataset.productName = "";
+    setRegistryStatus(row, "");
+    return;
+  }
+  if (row.dataset.registryLookupValue === number) return;
+  row.dataset.registryLookupValue = number;
+  setRegistryStatus(row, "Ищу...");
+  try {
+    const product = await api(`/api/registry-products/by-number/${encodeURIComponent(number)}`);
+    row.dataset.registryNumber = product.registry_number;
+    row.dataset.productName = product.name;
+    row.dataset.displayName = product.display_name;
+    input.value = product.registry_number;
+    row.querySelector(".item-name").value = product.display_name;
+    setRegistryStatus(row, "Товар найден", "ok");
+  } catch (error) {
+    row.dataset.registryNumber = number;
+    row.dataset.productName = "";
+    setRegistryStatus(row, error.message || "Реестровый номер не найден", "error");
+  }
+}
+
 function isAutoOrLegacyIntroText(value) {
   const candidates = [state.lastAutoIntroText, buildAutoIntroText(), ...buildLegacyAutoIntroTexts()];
   return String(value || "").trim() === "" || candidates.some((candidate) => sameText(value, candidate));
@@ -242,7 +298,7 @@ function resetForm() {
   $("proposalForm").reset();
   $("quoteDate").value = todayIso();
   $("validUntil").value = addOneMonthIso(todayIso());
-  $("deliveryTermValue").value = 45;
+  $("deliveryTermValue").value = "";
   $("warrantyMonths").value = 12;
   $("specificationText").value = defaultSpecText();
   state.introTextEdited = false;
@@ -265,6 +321,7 @@ function fillForm(p) {
   $("templateId").value = p.template_id;
   $("recipientName").value = p.recipient_name;
   $("recipientInn").value = p.recipient_inn || "";
+  $("recipientEmail").value = p.recipient_email || "";
   $("recipientAddress").value = p.recipient_address || "";
   $("recipientUppercase").value = String(Boolean(p.recipient_uppercase));
   $("quoteDate").value = p.quote_date;
@@ -280,7 +337,7 @@ function fillForm(p) {
     $("introText").value = p.intro_text;
     state.introTextEdited = true;
   }
-  $("deliveryTermValue").value = p.delivery_term_value;
+  $("deliveryTermValue").value = p.delivery_term_value ?? "";
   $("deliveryTermUnit").value = p.delivery_term_unit;
   $("warrantyMonths").value = p.warranty_months;
   $("validUntil").value = p.valid_until;
@@ -312,9 +369,16 @@ window.editProposal = async (id) => {
 
 function addItem(item = {}) {
   const row = document.createElement("tr");
+  row.dataset.registryNumber = item.registry_number || "";
+  row.dataset.productName = item.product_name || "";
+  row.dataset.displayName = item.display_name || item.name || "";
   row.innerHTML = `
     <td class="item-no"></td>
-    <td><input class="item-name" value="${escapeHtml(item.name || "")}" required></td>
+    <td>
+      <input class="item-registry-number" value="${escapeHtml(item.registry_number || "")}">
+      <span class="registry-status"></span>
+    </td>
+    <td><textarea class="item-name" required>${escapeHtml(item.display_name || item.name || "")}</textarea></td>
     <td><input class="item-unit" value="${escapeHtml(item.unit || "Шт.")}"></td>
     <td><input class="item-quantity" type="number" min="1" step="1" value="${item.quantity || 1}"></td>
     <td><input class="item-price" type="number" min="0" step="0.01" value="${item.unit_price_vat || 0}"></td>
@@ -323,6 +387,13 @@ function addItem(item = {}) {
   `;
   $("itemsBody").append(row);
   row.querySelectorAll("input").forEach((input) => input.addEventListener("input", recalc));
+  row.querySelector(".item-name").addEventListener("input", () => {
+    row.dataset.displayName = row.querySelector(".item-name").value;
+  });
+  row.querySelector(".item-registry-number").addEventListener("input", () => {
+    row.dataset.registryLookupValue = "";
+    scheduleRegistryLookup(row);
+  });
   row.querySelector(".remove-row").addEventListener("click", () => {
     row.remove();
     recalc();
@@ -331,20 +402,30 @@ function addItem(item = {}) {
 }
 
 function collectItems() {
-  return [...$("itemsBody").querySelectorAll("tr")].map((row) => ({
-    name: row.querySelector(".item-name").value,
+  return [...$("itemsBody").querySelectorAll("tr")].map((row) => {
+    const displayName = row.querySelector(".item-name").value;
+    return {
+    name: displayName,
+    registry_number: row.querySelector(".item-registry-number").value.trim() || null,
+    product_name: row.dataset.productName || displayName || null,
+    display_name: displayName,
     unit: row.querySelector(".item-unit").value || "Шт.",
     quantity: Number(row.querySelector(".item-quantity").value || 1),
     unit_price_vat: Number(row.querySelector(".item-price").value || 0),
-  }));
+  };
+  });
 }
 
 function collectPayload() {
   syncIntroText(false);
+  const deliveryTermValue = $("deliveryTermValue").value.trim();
+  const recipientInn = $("recipientInn").value.trim();
+  const recipientEmail = $("recipientEmail").value.trim();
   return {
     template_id: Number($("templateId").value),
     recipient_name: $("recipientName").value,
-    recipient_inn: $("recipientInn").value || null,
+    recipient_inn: recipientInn || null,
+    recipient_email: recipientEmail || null,
     recipient_address: $("recipientAddress").value || null,
     recipient_uppercase: $("recipientUppercase").value === "true",
     quote_date: $("quoteDate").value,
@@ -352,7 +433,7 @@ function collectPayload() {
     request_type: $("requestType").value,
     request_number: $("requestNumber").value || null,
     request_date: $("requestDate").value || null,
-    delivery_term_value: Number($("deliveryTermValue").value || 45),
+    delivery_term_value: deliveryTermValue ? Number(deliveryTermValue) : null,
     delivery_term_unit: $("deliveryTermUnit").value,
     warranty_months: Number($("warrantyMonths").value || 0),
     valid_until: $("validUntil").value || null,
@@ -384,8 +465,18 @@ function recalc() {
 
 async function saveProposal() {
   const payload = collectPayload();
-  if (!payload.recipient_name || !payload.items.length || payload.items.some((i) => !i.name)) {
+  if (!payload.recipient_name || !payload.items.length || payload.items.some((i) => !i.display_name)) {
     toast("Заполните адресата и товары");
+    return null;
+  }
+  if (!isValidInn(payload.recipient_inn)) {
+    toast("Проверьте ИНН: нужно 10 или 12 цифр с корректной контрольной суммой");
+    $("recipientInn").focus();
+    return null;
+  }
+  if (!isValidEmail(payload.recipient_email)) {
+    toast("Проверьте email адресата");
+    $("recipientEmail").focus();
     return null;
   }
   const path = state.currentProposal ? `/api/proposals/${state.currentProposal.id}` : "/api/proposals";
@@ -526,6 +617,7 @@ document.addEventListener("DOMContentLoaded", () => {
     toast("КП удалено");
   });
   $("requestType").addEventListener("change", toggleRequestFields);
+  $("recipientInn").addEventListener("input", () => keepDigitsOnly($("recipientInn"), 12));
   ["requestNumber", "requestDate"].forEach((id) => $(id).addEventListener("input", () => syncIntroText(false)));
   $("introText").addEventListener("input", () => {
     state.introTextEdited = !isAutoOrLegacyIntroText($("introText").value);
@@ -561,6 +653,21 @@ document.addEventListener("DOMContentLoaded", () => {
     await loadTemplates();
     await loadAdmin();
     toast("Шаблон загружен");
+  });
+  $("registryUploadForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const file = $("registryFile").files[0];
+    if (!file) {
+      toast("Выберите XLSX-файл");
+      return;
+    }
+    const data = new FormData();
+    data.append("file", file);
+    const result = await api("/api/admin/registry-products/import", { method: "POST", body: data, headers: {} });
+    $("registryFile").value = "";
+    const errors = result.errors?.length ? `\nОшибки: ${result.errors.join("; ")}` : "";
+    $("registryImportResult").textContent = `Создано: ${result.created}\nОбновлено: ${result.updated}\nПропущено: ${result.skipped}${errors}`;
+    toast("Реестр товаров загружен");
   });
   resetForm();
   bootstrap();
