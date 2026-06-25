@@ -1,4 +1,4 @@
-import shutil
+﻿import shutil
 import subprocess
 import uuid
 from copy import deepcopy
@@ -11,12 +11,12 @@ from docx.oxml.ns import qn
 
 from app.config import get_settings
 from app.models import Proposal
-from app.services.money import format_money, format_numeric_date, format_ru_date
+from app.services.money import format_money, format_numeric_date, format_ru_date, sanitize_filename_part
 
 
 DEFAULT_SPECIFICATION_TEXT = (
-    "Данное коммерческое предложение действительно для конфигурации, описанной в приложении "
-    "“Спецификация №1”, приложенном к письму."
+    "Р”Р°РЅРЅРѕРµ РєРѕРјРјРµСЂС‡РµСЃРєРѕРµ РїСЂРµРґР»РѕР¶РµРЅРёРµ РґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ РґР»СЏ РєРѕРЅС„РёРіСѓСЂР°С†РёРё, РѕРїРёСЃР°РЅРЅРѕР№ РІ РїСЂРёР»РѕР¶РµРЅРёРё "
+    "вЂњРЎРїРµС†РёС„РёРєР°С†РёСЏ в„–1вЂќ, РїСЂРёР»РѕР¶РµРЅРЅРѕРј Рє РїРёСЃСЊРјСѓ."
 )
 
 
@@ -31,22 +31,22 @@ def _set_times_new_roman(run) -> None:
 def default_intro_text(proposal: Proposal) -> str:
     if proposal.request_type.value == "with_request" and proposal.request_number and proposal.request_date:
         return (
-            f"Изучив направленный Вами запрос №{proposal.request_number} от "
-            f"{format_numeric_date(proposal.request_date)} о предоставлении ценовой информации, "
-            "мы, нижеподписавшиеся, предлагаем осуществить поставку оборудования, указанного в запросе, "
-            "подтвержденную прилагаемой таблицей, в которой указана цена единицы товара и общая стоимость:"
+            f"РР·СѓС‡РёРІ РЅР°РїСЂР°РІР»РµРЅРЅС‹Р№ Р’Р°РјРё Р·Р°РїСЂРѕСЃ в„–{proposal.request_number} РѕС‚ "
+            f"{format_numeric_date(proposal.request_date)} Рѕ РїСЂРµРґРѕСЃС‚Р°РІР»РµРЅРёРё С†РµРЅРѕРІРѕР№ РёРЅС„РѕСЂРјР°С†РёРё, "
+            "РјС‹, РЅРёР¶РµРїРѕРґРїРёСЃР°РІС€РёРµСЃСЏ, РїСЂРµРґР»Р°РіР°РµРј РѕСЃСѓС‰РµСЃС‚РІРёС‚СЊ РїРѕСЃС‚Р°РІРєСѓ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ, СѓРєР°Р·Р°РЅРЅРѕРіРѕ РІ Р·Р°РїСЂРѕСЃРµ, "
+            "РїРѕРґС‚РІРµСЂР¶РґРµРЅРЅСѓСЋ РїСЂРёР»Р°РіР°РµРјРѕР№ С‚Р°Р±Р»РёС†РµР№, РІ РєРѕС‚РѕСЂРѕР№ СѓРєР°Р·Р°РЅР° С†РµРЅР° РµРґРёРЅРёС†С‹ С‚РѕРІР°СЂР° Рё РѕР±С‰Р°СЏ СЃС‚РѕРёРјРѕСЃС‚СЊ:"
         )
-    return "Предлагаем рассмотреть коммерческое предложение на поставку оборудования на следующих условиях."
+    return "РџСЂРµРґР»Р°РіР°РµРј СЂР°СЃСЃРјРѕС‚СЂРµС‚СЊ РєРѕРјРјРµСЂС‡РµСЃРєРѕРµ РїСЂРµРґР»РѕР¶РµРЅРёРµ РЅР° РїРѕСЃС‚Р°РІРєСѓ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ РЅР° СЃР»РµРґСѓСЋС‰РёС… СѓСЃР»РѕРІРёСЏС…."
 
 
 def legacy_intro_text(proposal: Proposal) -> str:
     if proposal.request_type.value == "with_request" and proposal.request_number and proposal.request_date:
         return (
-            f"Изучив направленный Вами запрос №{proposal.request_number} от "
-            f"{format_ru_date(proposal.request_date)} о предоставлении ценовой информации, "
-            "мы предлагаем поставку оборудования на следующих условиях."
+            f"РР·СѓС‡РёРІ РЅР°РїСЂР°РІР»РµРЅРЅС‹Р№ Р’Р°РјРё Р·Р°РїСЂРѕСЃ в„–{proposal.request_number} РѕС‚ "
+            f"{format_ru_date(proposal.request_date)} Рѕ РїСЂРµРґРѕСЃС‚Р°РІР»РµРЅРёРё С†РµРЅРѕРІРѕР№ РёРЅС„РѕСЂРјР°С†РёРё, "
+            "РјС‹ РїСЂРµРґР»Р°РіР°РµРј РїРѕСЃС‚Р°РІРєСѓ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ РЅР° СЃР»РµРґСѓСЋС‰РёС… СѓСЃР»РѕРІРёСЏС…."
         )
-    return "Предлагаем рассмотреть коммерческое предложение на поставку оборудования на следующих условиях."
+    return "РџСЂРµРґР»Р°РіР°РµРј СЂР°СЃСЃРјРѕС‚СЂРµС‚СЊ РєРѕРјРјРµСЂС‡РµСЃРєРѕРµ РїСЂРµРґР»РѕР¶РµРЅРёРµ РЅР° РїРѕСЃС‚Р°РІРєСѓ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ РЅР° СЃР»РµРґСѓСЋС‰РёС… СѓСЃР»РѕРІРёСЏС…."
 
 
 def is_auto_intro_text(candidate: str | None, proposal: Proposal) -> bool:
@@ -62,15 +62,15 @@ def is_auto_intro_text(candidate: str | None, proposal: Proposal) -> bool:
 
 def proposal_context(proposal: Proposal) -> dict[str, str]:
     recipient = proposal.recipient_name.upper() if proposal.recipient_uppercase else proposal.recipient_name
-    delivery_unit = "рабочих дней" if proposal.delivery_term_unit == "working_days" else "календарных дней"
+    delivery_unit = "СЂР°Р±РѕС‡РёС… РґРЅРµР№" if proposal.delivery_term_unit == "working_days" else "РєР°Р»РµРЅРґР°СЂРЅС‹С… РґРЅРµР№"
     delivery_term = f"{proposal.delivery_term_value} {delivery_unit}" if proposal.delivery_term_value else ""
     optional_conditions = []
     if proposal.payment_terms:
-        optional_conditions.append(f"Условия оплаты: {proposal.payment_terms}")
+        optional_conditions.append(f"РЈСЃР»РѕРІРёСЏ РѕРїР»Р°С‚С‹: {proposal.payment_terms}")
     if proposal.delivery_terms:
-        optional_conditions.append(f"Условия доставки: {proposal.delivery_terms}")
+        optional_conditions.append(f"РЈСЃР»РѕРІРёСЏ РґРѕСЃС‚Р°РІРєРё: {proposal.delivery_terms}")
     if proposal.delivery_place:
-        optional_conditions.append(f"Место поставки: {proposal.delivery_place}")
+        optional_conditions.append(f"РњРµСЃС‚Рѕ РїРѕСЃС‚Р°РІРєРё: {proposal.delivery_place}")
 
     return {
         "recipient_name": recipient,
@@ -82,7 +82,7 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         "intro_text": proposal.intro_text or default_intro_text(proposal),
         "specification_text": proposal.specification_text,
         "delivery_term": delivery_term,
-        "warranty": f"{proposal.warranty_months} мес.",
+        "warranty": f"{proposal.warranty_months} РјРµСЃ.",
         "valid_until": format_ru_date(proposal.valid_until),
         "payment_terms": proposal.payment_terms or "",
         "delivery_terms": proposal.delivery_terms or "",
@@ -93,8 +93,8 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         "vat_amount": format_money(proposal.vat_amount),
         "total_amount_words": proposal.total_amount_words,
         "vat_amount_words": proposal.vat_amount_words,
-        "signer_title": "Генеральный директор",
-        "signer_name": "В.О. Галустян",
+        "signer_title": "Р“РµРЅРµСЂР°Р»СЊРЅС‹Р№ РґРёСЂРµРєС‚РѕСЂ",
+        "signer_name": "Р’.Рћ. Р“Р°Р»СѓСЃС‚СЏРЅ",
     }
 
 
@@ -229,21 +229,15 @@ def _replace_items_table(doc: Document, proposal: Proposal) -> None:
         return
 
 
-def _filename_part(value: str | None, fallback: str, max_len: int = 80) -> str:
-    invalid_chars = set(r'\/:*?"<>|')
-    cleaned = "".join("-" if char in invalid_chars else char for char in str(value or fallback))
-    cleaned = " ".join(cleaned.split()).strip(" .,-")
-    return (cleaned[:max_len].strip(" .,-") or fallback)
-
-
 def _output_stem(proposal: Proposal, suffix: str = "") -> str:
-    template_name = getattr(getattr(proposal.template_version, "template", None), "name", None)
+    proposal_date = proposal.quote_date.strftime("%d.%m.%Y")
     parts = [
-        _filename_part(template_name, "Шаблон"),
-        _filename_part(proposal.recipient_name, "Адресат"),
-        _filename_part(proposal.outgoing_number, "без номера", max_len=40),
+        "\u041a\u041f \u0411\u0435\u0448\u0442\u0430\u0443",
+        sanitize_filename_part(proposal.recipient_inn or "\u0431\u0435\u0437 \u0418\u041d\u041d", max_len=20),
+        sanitize_filename_part(proposal.recipient_name, max_len=80),
+        proposal_date,
     ]
-    return f"{', '.join(parts)}{suffix}"
+    return f"{' - '.join(parts)}{suffix}"
 
 
 def _make_output_paths(proposal: Proposal, suffix: str = "") -> tuple[Path, Path]:
@@ -273,7 +267,7 @@ def convert_docx_to_pdf(docx_path: Path, output_dir: Path | None = None) -> Path
     settings = get_settings()
     soffice = settings.libreoffice_bin
     if shutil.which(soffice) is None and not Path(soffice).exists():
-        raise RuntimeError("LibreOffice не найден. Укажите LIBREOFFICE_BIN или установите libreoffice в контейнер.")
+        raise RuntimeError("LibreOffice РЅРµ РЅР°Р№РґРµРЅ. РЈРєР°Р¶РёС‚Рµ LIBREOFFICE_BIN РёР»Рё СѓСЃС‚Р°РЅРѕРІРёС‚Рµ libreoffice РІ РєРѕРЅС‚РµР№РЅРµСЂ.")
     out_dir = output_dir or docx_path.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
@@ -294,7 +288,7 @@ def convert_docx_to_pdf(docx_path: Path, output_dir: Path | None = None) -> Path
     )
     pdf_path = out_dir / f"{docx_path.stem}.pdf"
     if result.returncode != 0 or not pdf_path.exists():
-        raise RuntimeError(f"Не удалось сконвертировать DOCX в PDF: {result.stderr or result.stdout}")
+        raise RuntimeError(f"РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєРѕРЅРІРµСЂС‚РёСЂРѕРІР°С‚СЊ DOCX РІ PDF: {result.stderr or result.stdout}")
     return pdf_path
 
 
@@ -312,3 +306,5 @@ def generate_files(proposal: Proposal, template_path: Path) -> tuple[Path, Path]
 def generate_preview(proposal: Proposal, template_path: Path) -> Path:
     docx_path = render_docx(proposal, template_path, preview=True)
     return convert_docx_to_pdf(docx_path, output_dir=get_settings().previews_dir)
+
+

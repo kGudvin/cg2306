@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google.auth.transport import requests
 from google.oauth2 import id_token
@@ -61,14 +61,16 @@ def login_or_create_user(db: Session, email: str, full_name: str | None) -> User
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> User:
-    if credentials is None:
+    token = credentials.credentials if credentials is not None else request.query_params.get("access_token")
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Требуется авторизация")
     settings = get_settings()
     try:
-        payload = jwt.decode(credentials.credentials, settings.app_secret, algorithms=["HS256"])
+        payload = jwt.decode(token, settings.app_secret, algorithms=["HS256"])
         user_id = int(payload["sub"])
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Сессия недействительна") from exc

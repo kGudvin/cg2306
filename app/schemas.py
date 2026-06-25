@@ -180,7 +180,9 @@ class ProposalRead(BaseModel):
 class GenerateResponse(BaseModel):
     proposal_id: int
     docx_url: str | None = None
+    docx_filename: str | None = None
     pdf_url: str
+    pdf_filename: str | None = None
 
 
 class RegistryProductRead(BaseModel):

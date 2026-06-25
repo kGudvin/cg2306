@@ -119,6 +119,8 @@ def seed_initial_data(db: Session) -> None:
         )
     elif settings.beshtau_source_template_path.exists() and Path(version.file_path).name == "beshtau_prepared_v1.docx":
         prepare_beshtau_template_from_source(settings.beshtau_source_template_path, Path(version.file_path))
+    elif version.placeholder_schema == "builtin-beshtau-v1" and Path(version.file_path).exists():
+        create_demo_beshtau_template(Path(version.file_path))
     db.commit()
 
 
@@ -276,7 +278,7 @@ def preview_proposal(proposal_id: int, db: Session = Depends(get_db), user: User
     pdf_path = generate_preview(proposal, Path(proposal.template_version.file_path))
     proposal.preview_pdf_path = str(pdf_path)
     db.commit()
-    return GenerateResponse(proposal_id=proposal.id, pdf_url=f"/api/proposals/{proposal.id}/download/preview")
+    return GenerateResponse(proposal_id=proposal.id, pdf_url=f"/api/proposals/{proposal.id}/download/preview", pdf_filename=pdf_path.name)
 
 
 @app.post("/api/proposals/{proposal_id}/generate", response_model=GenerateResponse)
@@ -290,7 +292,9 @@ def generate_proposal(proposal_id: int, db: Session = Depends(get_db), user: Use
     return GenerateResponse(
         proposal_id=proposal.id,
         docx_url=f"/api/proposals/{proposal.id}/download/docx",
+        docx_filename=docx_path.name,
         pdf_url=f"/api/proposals/{proposal.id}/download/pdf",
+        pdf_filename=pdf_path.name,
     )
 
 

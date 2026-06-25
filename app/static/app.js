@@ -184,6 +184,16 @@ function filenameFromDisposition(disposition) {
   return plain ? plain[1] : "";
 }
 
+function basename(path) {
+  return String(path || "").split(/[\\/]/).filter(Boolean).pop() || "";
+}
+
+function withAccessToken(url) {
+  if (!state.token) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}access_token=${encodeURIComponent(state.token)}`;
+}
+
 async function apiBlob(path) {
   const response = await fetch(path, { headers: { Authorization: `Bearer ${state.token}` } });
   if (!response.ok) throw new Error("Файл еще не создан");
@@ -353,6 +363,10 @@ function fillForm(p) {
   $("generateBtn").disabled = false;
   $("docxLink").classList.toggle("hidden", !p.final_docx_path);
   $("pdfLink").classList.toggle("hidden", !p.final_pdf_path);
+  $("docxLink").href = p.final_docx_path ? withAccessToken(`/api/proposals/${p.id}/download/docx`) : "#";
+  $("pdfLink").href = p.final_pdf_path ? withAccessToken(`/api/proposals/${p.id}/download/pdf`) : "#";
+  $("docxLink").download = basename(p.final_docx_path);
+  $("pdfLink").download = basename(p.final_pdf_path);
   toggleRequestFields();
   recalc();
 }
@@ -512,27 +526,16 @@ async function generateFinal() {
   const result = await api(`/api/proposals/${saved.id}/generate`, { method: "POST", body: "{}" });
   $("docxLink").classList.remove("hidden");
   $("pdfLink").classList.remove("hidden");
-  $("docxLink").dataset.url = result.docx_url;
-  $("pdfLink").dataset.url = result.pdf_url;
+  $("docxLink").href = withAccessToken(result.docx_url);
+  $("pdfLink").href = withAccessToken(result.pdf_url);
+  $("docxLink").download = result.docx_filename || "";
+  $("pdfLink").download = result.pdf_filename || "";
   const { blob } = await apiBlob(result.pdf_url);
   if (state.pdfObjectUrl) URL.revokeObjectURL(state.pdfObjectUrl);
   state.pdfObjectUrl = URL.createObjectURL(blob);
   $("pdfPreview").src = state.pdfObjectUrl;
   await loadProposals();
   toast("Файлы готовы");
-}
-
-async function downloadFromLink(event) {
-  event.preventDefault();
-  const url = event.currentTarget.dataset.url;
-  if (!url) return;
-  const { blob, filename } = await apiBlob(url);
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = objectUrl;
-  anchor.download = filename || (url.endsWith("/docx") ? "commercial_proposal.docx" : "commercial_proposal.pdf");
-  anchor.click();
-  URL.revokeObjectURL(objectUrl);
 }
 
 async function loadAdmin() {
@@ -626,8 +629,6 @@ document.addEventListener("DOMContentLoaded", () => {
   $("quoteDate").addEventListener("change", () => {
     if (!$("validUntil").value) $("validUntil").value = addOneMonthIso($("quoteDate").value);
   });
-  $("docxLink").addEventListener("click", downloadFromLink);
-  $("pdfLink").addEventListener("click", downloadFromLink);
   $("allowedEmailForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     await api("/api/admin/allowed-emails", {

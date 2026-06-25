@@ -1,8 +1,7 @@
 from pathlib import Path
 
 from docx import Document
-from docx.enum.section import WD_SECTION
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
@@ -36,9 +35,9 @@ def create_demo_beshtau_template(path: Path) -> None:
     left = header.cell(0, 0)
     right = header.cell(0, 1)
     left.text = "ООО «Бештау Электроникс»\nТел.: +7 (000) 000-00-00\nwww.beshtau.ru\ninfo@beshtau.ru"
-    right.text = "Исх. № {{outgoing_number}}\nот {{quote_date}}\n\n{{recipient_name}}\nИНН {{recipient_inn}}\n{{recipient_address}}"
-    for p in right.paragraphs:
-        p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    right.text = "Исх. № {{outgoing_number}}\nот {{quote_date}}\n\n{{recipient_name}}\nИНН {{recipient_inn}}\n{{recipient_email}}\n{{recipient_address}}"
+    for paragraph in right.paragraphs:
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -57,9 +56,9 @@ def create_demo_beshtau_template(path: Path) -> None:
         "№ п/п",
         "Наименование товара",
         "Ед. изм.",
-        "Общее количество",
+        "Общее кол-во",
         "Цена за единицу",
-        "Общая сумма, руб., с учетом НДС",
+        "Общая сумма (руб.)\n(с учетом НДС)",
     ]
     for index, text in enumerate(headers):
         cell = table.cell(0, index)
@@ -146,11 +145,11 @@ def prepare_beshtau_template_from_source(source_path: Path, output_path: Path) -
             set_cell_text(head.cell(0, 0), "Исх.№ {{outgoing_number}} от {{quote_date}}")
             set_cell_text(
                 head.cell(0, 1),
-                "{{recipient_name}}\nИНН {{recipient_inn}}\n{{recipient_address}}",
+                "{{recipient_name}}\nИНН {{recipient_inn}}\n{{recipient_email}}\n{{recipient_address}}",
                 alignment=WD_ALIGN_PARAGRAPH.RIGHT,
             )
 
-    non_empty = [p for p in doc.paragraphs if p.text.strip()]
+    non_empty = [paragraph for paragraph in doc.paragraphs if paragraph.text.strip()]
     if non_empty:
         title = non_empty[0]
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
