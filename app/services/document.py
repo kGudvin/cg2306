@@ -15,8 +15,11 @@ from app.services.money import format_money, format_numeric_date, format_ru_date
 
 
 DEFAULT_SPECIFICATION_TEXT = (
-    "Р”Р°РЅРЅРѕРµ РєРѕРјРјРµСЂС‡РµСЃРєРѕРµ РїСЂРµРґР»РѕР¶РµРЅРёРµ РґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ РґР»СЏ РєРѕРЅС„РёРіСѓСЂР°С†РёРё, РѕРїРёСЃР°РЅРЅРѕР№ РІ РїСЂРёР»РѕР¶РµРЅРёРё "
-    "вЂњРЎРїРµС†РёС„РёРєР°С†РёСЏ в„–1вЂќ, РїСЂРёР»РѕР¶РµРЅРЅРѕРј Рє РїРёСЃСЊРјСѓ."
+    "\u0414\u0430\u043d\u043d\u043e\u0435 \u043a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u043e\u0435 \u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u0435 "
+    "\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0442\u0435\u043b\u044c\u043d\u043e \u0434\u043b\u044f \u043a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438, "
+    "\u043e\u043f\u0438\u0441\u0430\u043d\u043d\u043e\u0439 \u0432 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0438 "
+    "\u201c\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u21161\u201d, "
+    "\u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u043d\u043e\u043c \u043a \u043f\u0438\u0441\u044c\u043c\u0443."
 )
 
 
@@ -31,22 +34,25 @@ def _set_times_new_roman(run) -> None:
 def default_intro_text(proposal: Proposal) -> str:
     if proposal.request_type.value == "with_request" and proposal.request_number and proposal.request_date:
         return (
-            f"РР·СѓС‡РёРІ РЅР°РїСЂР°РІР»РµРЅРЅС‹Р№ Р’Р°РјРё Р·Р°РїСЂРѕСЃ в„–{proposal.request_number} РѕС‚ "
-            f"{format_numeric_date(proposal.request_date)} Рѕ РїСЂРµРґРѕСЃС‚Р°РІР»РµРЅРёРё С†РµРЅРѕРІРѕР№ РёРЅС„РѕСЂРјР°С†РёРё, "
-            "РјС‹, РЅРёР¶РµРїРѕРґРїРёСЃР°РІС€РёРµСЃСЏ, РїСЂРµРґР»Р°РіР°РµРј РѕСЃСѓС‰РµСЃС‚РІРёС‚СЊ РїРѕСЃС‚Р°РІРєСѓ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ, СѓРєР°Р·Р°РЅРЅРѕРіРѕ РІ Р·Р°РїСЂРѕСЃРµ, "
-            "РїРѕРґС‚РІРµСЂР¶РґРµРЅРЅСѓСЋ РїСЂРёР»Р°РіР°РµРјРѕР№ С‚Р°Р±Р»РёС†РµР№, РІ РєРѕС‚РѕСЂРѕР№ СѓРєР°Р·Р°РЅР° С†РµРЅР° РµРґРёРЅРёС†С‹ С‚РѕРІР°СЂР° Рё РѕР±С‰Р°СЏ СЃС‚РѕРёРјРѕСЃС‚СЊ:"
+            f"\u0418\u0437\u0443\u0447\u0438\u0432 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0439 \u0412\u0430\u043c\u0438 \u0437\u0430\u043f\u0440\u043e\u0441 \u2116{proposal.request_number} \u043e\u0442 "
+            f"{format_numeric_date(proposal.request_date)} \u043e \u043f\u0440\u0435\u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0438\u0438 \u0446\u0435\u043d\u043e\u0432\u043e\u0439 \u0438\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0438\u0438, "
+            "\u043c\u044b, \u043d\u0438\u0436\u0435\u043f\u043e\u0434\u043f\u0438\u0441\u0430\u0432\u0448\u0438\u0435\u0441\u044f, \u043f\u0440\u0435\u0434\u043b\u0430\u0433\u0430\u0435\u043c \u043e\u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0438\u0442\u044c "
+            "\u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0443 \u043e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u044f, \u0443\u043a\u0430\u0437\u0430\u043d\u043d\u043e\u0433\u043e \u0432 \u0437\u0430\u043f\u0440\u043e\u0441\u0435, "
+            "\u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043d\u0443\u044e \u043f\u0440\u0438\u043b\u0430\u0433\u0430\u0435\u043c\u043e\u0439 \u0442\u0430\u0431\u043b\u0438\u0446\u0435\u0439, \u0432 \u043a\u043e\u0442\u043e\u0440\u043e\u0439 "
+            "\u0443\u043a\u0430\u0437\u0430\u043d\u0430 \u0446\u0435\u043d\u0430 \u0435\u0434\u0438\u043d\u0438\u0446\u044b \u0442\u043e\u0432\u0430\u0440\u0430 \u0438 \u043e\u0431\u0449\u0430\u044f \u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c:"
         )
-    return "РџСЂРµРґР»Р°РіР°РµРј СЂР°СЃСЃРјРѕС‚СЂРµС‚СЊ РєРѕРјРјРµСЂС‡РµСЃРєРѕРµ РїСЂРµРґР»РѕР¶РµРЅРёРµ РЅР° РїРѕСЃС‚Р°РІРєСѓ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ РЅР° СЃР»РµРґСѓСЋС‰РёС… СѓСЃР»РѕРІРёСЏС…."
+    return "\u041f\u0440\u0435\u0434\u043b\u0430\u0433\u0430\u0435\u043c \u0440\u0430\u0441\u0441\u043c\u043e\u0442\u0440\u0435\u0442\u044c \u043a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u043e\u0435 \u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u043d\u0430 \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0443 \u043e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u044f \u043d\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0445 \u0443\u0441\u043b\u043e\u0432\u0438\u044f\u0445."
 
 
 def legacy_intro_text(proposal: Proposal) -> str:
     if proposal.request_type.value == "with_request" and proposal.request_number and proposal.request_date:
         return (
-            f"РР·СѓС‡РёРІ РЅР°РїСЂР°РІР»РµРЅРЅС‹Р№ Р’Р°РјРё Р·Р°РїСЂРѕСЃ в„–{proposal.request_number} РѕС‚ "
-            f"{format_ru_date(proposal.request_date)} Рѕ РїСЂРµРґРѕСЃС‚Р°РІР»РµРЅРёРё С†РµРЅРѕРІРѕР№ РёРЅС„РѕСЂРјР°С†РёРё, "
-            "РјС‹ РїСЂРµРґР»Р°РіР°РµРј РїРѕСЃС‚Р°РІРєСѓ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ РЅР° СЃР»РµРґСѓСЋС‰РёС… СѓСЃР»РѕРІРёСЏС…."
+            f"\u0418\u0437\u0443\u0447\u0438\u0432 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0439 \u0412\u0430\u043c\u0438 \u0437\u0430\u043f\u0440\u043e\u0441 \u2116{proposal.request_number} \u043e\u0442 "
+            f"{format_ru_date(proposal.request_date)} \u043e \u043f\u0440\u0435\u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0438\u0438 \u0446\u0435\u043d\u043e\u0432\u043e\u0439 \u0438\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0438\u0438, "
+            "\u043c\u044b \u043f\u0440\u0435\u0434\u043b\u0430\u0433\u0430\u0435\u043c \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0443 \u043e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u044f \u043d\u0430 "
+            "\u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0445 \u0443\u0441\u043b\u043e\u0432\u0438\u044f\u0445."
         )
-    return "РџСЂРµРґР»Р°РіР°РµРј СЂР°СЃСЃРјРѕС‚СЂРµС‚СЊ РєРѕРјРјРµСЂС‡РµСЃРєРѕРµ РїСЂРµРґР»РѕР¶РµРЅРёРµ РЅР° РїРѕСЃС‚Р°РІРєСѓ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ РЅР° СЃР»РµРґСѓСЋС‰РёС… СѓСЃР»РѕРІРёСЏС…."
+    return "\u041f\u0440\u0435\u0434\u043b\u0430\u0433\u0430\u0435\u043c \u0440\u0430\u0441\u0441\u043c\u043e\u0442\u0440\u0435\u0442\u044c \u043a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u043e\u0435 \u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u043d\u0430 \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0443 \u043e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u044f \u043d\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0445 \u0443\u0441\u043b\u043e\u0432\u0438\u044f\u0445."
 
 
 def is_auto_intro_text(candidate: str | None, proposal: Proposal) -> bool:
@@ -62,15 +68,15 @@ def is_auto_intro_text(candidate: str | None, proposal: Proposal) -> bool:
 
 def proposal_context(proposal: Proposal) -> dict[str, str]:
     recipient = proposal.recipient_name.upper() if proposal.recipient_uppercase else proposal.recipient_name
-    delivery_unit = "СЂР°Р±РѕС‡РёС… РґРЅРµР№" if proposal.delivery_term_unit == "working_days" else "РєР°Р»РµРЅРґР°СЂРЅС‹С… РґРЅРµР№"
+    delivery_unit = "\u0440\u0430\u0431\u043e\u0447\u0438\u0445 \u0434\u043d\u0435\u0439" if proposal.delivery_term_unit == "working_days" else "\u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u043d\u044b\u0445 \u0434\u043d\u0435\u0439"
     delivery_term = f"{proposal.delivery_term_value} {delivery_unit}" if proposal.delivery_term_value else ""
     optional_conditions = []
     if proposal.payment_terms:
-        optional_conditions.append(f"РЈСЃР»РѕРІРёСЏ РѕРїР»Р°С‚С‹: {proposal.payment_terms}")
+        optional_conditions.append(f"\u0423\u0441\u043b\u043e\u0432\u0438\u044f \u043e\u043f\u043b\u0430\u0442\u044b: {proposal.payment_terms}")
     if proposal.delivery_terms:
-        optional_conditions.append(f"РЈСЃР»РѕРІРёСЏ РґРѕСЃС‚Р°РІРєРё: {proposal.delivery_terms}")
+        optional_conditions.append(f"\u0423\u0441\u043b\u043e\u0432\u0438\u044f \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438: {proposal.delivery_terms}")
     if proposal.delivery_place:
-        optional_conditions.append(f"РњРµСЃС‚Рѕ РїРѕСЃС‚Р°РІРєРё: {proposal.delivery_place}")
+        optional_conditions.append(f"\u041c\u0435\u0441\u0442\u043e \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438: {proposal.delivery_place}")
 
     return {
         "recipient_name": recipient,
@@ -82,7 +88,7 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         "intro_text": proposal.intro_text or default_intro_text(proposal),
         "specification_text": proposal.specification_text,
         "delivery_term": delivery_term,
-        "warranty": f"{proposal.warranty_months} РјРµСЃ.",
+        "warranty": f"{proposal.warranty_months} \u043c\u0435\u0441.",
         "valid_until": format_ru_date(proposal.valid_until),
         "payment_terms": proposal.payment_terms or "",
         "delivery_terms": proposal.delivery_terms or "",
@@ -93,8 +99,8 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         "vat_amount": format_money(proposal.vat_amount),
         "total_amount_words": proposal.total_amount_words,
         "vat_amount_words": proposal.vat_amount_words,
-        "signer_title": "Р“РµРЅРµСЂР°Р»СЊРЅС‹Р№ РґРёСЂРµРєС‚РѕСЂ",
-        "signer_name": "Р’.Рћ. Р“Р°Р»СѓСЃС‚СЏРЅ",
+        "signer_title": "\u0413\u0435\u043d\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0439 \u0434\u0438\u0440\u0435\u043a\u0442\u043e\u0440",
+        "signer_name": "\u0412.\u041e. \u0413\u0430\u043b\u0443\u0441\u0442\u044f\u043d",
     }
 
 
@@ -267,7 +273,7 @@ def convert_docx_to_pdf(docx_path: Path, output_dir: Path | None = None) -> Path
     settings = get_settings()
     soffice = settings.libreoffice_bin
     if shutil.which(soffice) is None and not Path(soffice).exists():
-        raise RuntimeError("LibreOffice РЅРµ РЅР°Р№РґРµРЅ. РЈРєР°Р¶РёС‚Рµ LIBREOFFICE_BIN РёР»Рё СѓСЃС‚Р°РЅРѕРІРёС‚Рµ libreoffice РІ РєРѕРЅС‚РµР№РЅРµСЂ.")
+        raise RuntimeError("LibreOffice не найден. Укажите LIBREOFFICE_BIN или установите libreoffice в контейнер.")
     out_dir = output_dir or docx_path.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
@@ -288,7 +294,7 @@ def convert_docx_to_pdf(docx_path: Path, output_dir: Path | None = None) -> Path
     )
     pdf_path = out_dir / f"{docx_path.stem}.pdf"
     if result.returncode != 0 or not pdf_path.exists():
-        raise RuntimeError(f"РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєРѕРЅРІРµСЂС‚РёСЂРѕРІР°С‚СЊ DOCX РІ PDF: {result.stderr or result.stdout}")
+        raise RuntimeError(f"Не удалось сконвертировать DOCX в PDF: {result.stderr or result.stdout}")
     return pdf_path
 
 
@@ -306,5 +312,6 @@ def generate_files(proposal: Proposal, template_path: Path) -> tuple[Path, Path]
 def generate_preview(proposal: Proposal, template_path: Path) -> Path:
     docx_path = render_docx(proposal, template_path, preview=True)
     return convert_docx_to_pdf(docx_path, output_dir=get_settings().previews_dir)
+
 
 
