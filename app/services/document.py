@@ -6,6 +6,8 @@ from datetime import date
 from pathlib import Path
 
 from docx import Document
+from docx.enum.section import WD_ORIENT, WD_SECTION
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.table import _Cell, _Row, Table
 from docx.oxml.ns import qn
 
@@ -219,6 +221,39 @@ def _force_body_times_new_roman(doc: Document) -> None:
                         _set_times_new_roman(run)
 
 
+def _has_specification_page(proposal: Proposal) -> bool:
+    return len((proposal.specification_text or "").strip()) > 10
+
+
+def _add_text_with_breaks(paragraph, text: str) -> None:
+    lines = text.splitlines() or [""]
+    run = paragraph.add_run(lines[0])
+    _set_times_new_roman(run)
+    for line in lines[1:]:
+        run.add_break()
+        run.add_text(line)
+
+
+def _append_specification_page(doc: Document, proposal: Proposal) -> None:
+    if not _has_specification_page(proposal):
+        return
+    section = doc.add_section(WD_SECTION.NEW_PAGE)
+    section.orientation = WD_ORIENT.LANDSCAPE
+    section.page_width, section.page_height = section.page_height, section.page_width
+
+    title = (
+        f'Спецификация №1 к коммерческому предложению "Исх.№ {proposal.outgoing_number} '
+        f'от {format_ru_date(proposal.quote_date)}"'
+    )
+    title_paragraph = doc.add_paragraph()
+    title_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _add_text_with_breaks(title_paragraph, title)
+
+    doc.add_paragraph()
+    specification_paragraph = doc.add_paragraph()
+    _add_text_with_breaks(specification_paragraph, proposal.specification_text.strip())
+
+
 def _row_has_item_placeholders(row: _Row) -> bool:
     return any("{{item_" in cell.text for cell in row.cells)
 
@@ -278,6 +313,7 @@ def render_docx(proposal: Proposal, template_path: Path, preview: bool = False) 
     _remove_object_description_heading(doc)
     _remove_empty_block_placeholders(doc, context)
     _replace_everywhere(doc, context)
+    _append_specification_page(doc, proposal)
     _force_body_times_new_roman(doc)
     suffix = f"_preview_{uuid.uuid4().hex[:8]}" if preview else ""
     docx_path, _ = _make_output_paths(proposal, suffix=suffix)

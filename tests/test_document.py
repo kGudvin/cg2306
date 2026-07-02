@@ -3,8 +3,10 @@ from datetime import date
 from types import SimpleNamespace
 
 from docx import Document
+from docx.enum.section import WD_ORIENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-from app.services.document import _output_stem, _remove_object_description_heading, proposal_context
+from app.services.document import _append_specification_page, _output_stem, _remove_object_description_heading, proposal_context
 
 
 class DocumentNamingTest(unittest.TestCase):
@@ -63,6 +65,31 @@ class DocumentContentTest(unittest.TestCase):
         _remove_object_description_heading(doc)
 
         self.assertEqual([paragraph.text for paragraph in doc.paragraphs], ["Вступление", "Финальный текст"])
+
+    def test_appends_landscape_specification_page_for_long_text(self):
+        doc = Document()
+        doc.add_paragraph("Основной текст")
+        proposal = SimpleNamespace(
+            specification_text="Подробное описание спецификации",
+            outgoing_number="3006/3/М",
+            quote_date=date(2026, 6, 30),
+        )
+
+        _append_specification_page(doc, proposal)
+
+        self.assertEqual(len(doc.sections), 2)
+        self.assertEqual(doc.sections[-1].orientation, WD_ORIENT.LANDSCAPE)
+        self.assertIn('Спецификация №1 к коммерческому предложению "Исх.№ 3006/3/М от «30» июня 2026 г."', doc.paragraphs[-3].text)
+        self.assertEqual(doc.paragraphs[-3].alignment, WD_ALIGN_PARAGRAPH.RIGHT)
+        self.assertEqual(doc.paragraphs[-1].text, "Подробное описание спецификации")
+
+    def test_skips_specification_page_for_short_text(self):
+        doc = Document()
+        proposal = SimpleNamespace(specification_text="коротко", outgoing_number="3006/3/М", quote_date=date(2026, 6, 30))
+
+        _append_specification_page(doc, proposal)
+
+        self.assertEqual(len(doc.sections), 1)
 
 
 if __name__ == "__main__":
