@@ -60,15 +60,27 @@ class AllowedEmail(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Signer(Base):
+    __tablename__ = "signers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Template(Base):
     __tablename__ = "templates"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     organization: Mapped[str] = mapped_column(String(255))
+    default_signer_id: Mapped[int | None] = mapped_column(ForeignKey("signers.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    default_signer: Mapped[Signer | None] = relationship()
     versions: Mapped[list["TemplateVersion"]] = relationship(back_populates="template", cascade="all, delete-orphan")
 
 
@@ -94,6 +106,7 @@ class Proposal(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     template_id: Mapped[int] = mapped_column(ForeignKey("templates.id"), index=True)
     template_version_id: Mapped[int] = mapped_column(ForeignKey("template_versions.id"), index=True)
+    signer_id: Mapped[int | None] = mapped_column(ForeignKey("signers.id"), nullable=True)
 
     recipient_name: Mapped[str] = mapped_column(String(500))
     recipient_inn: Mapped[str | None] = mapped_column(String(32))
@@ -134,6 +147,7 @@ class Proposal(Base):
 
     user: Mapped[User] = relationship(back_populates="proposals")
     template_version: Mapped[TemplateVersion] = relationship(back_populates="proposals")
+    signer: Mapped[Signer | None] = relationship()
     items: Mapped[list["ProposalItem"]] = relationship(back_populates="proposal", cascade="all, delete-orphan")
 
 

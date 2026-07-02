@@ -21,6 +21,7 @@ DEFAULT_SPECIFICATION_TEXT = (
     "\u201c\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u21161\u201d, "
     "\u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u043d\u043e\u043c \u043a \u043f\u0438\u0441\u044c\u043c\u0443."
 )
+OBJECT_DESCRIPTION_HEADING = "\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u043e\u0431\u044a\u0435\u043a\u0442\u0430 \u0437\u0430\u043a\u0443\u043f\u043a\u0438"
 
 
 def _set_times_new_roman(run) -> None:
@@ -68,6 +69,8 @@ def is_auto_intro_text(candidate: str | None, proposal: Proposal) -> bool:
 
 def proposal_context(proposal: Proposal) -> dict[str, str]:
     recipient = proposal.recipient_name.upper() if proposal.recipient_uppercase else proposal.recipient_name
+    signer_title = proposal.signer.title if proposal.signer else "\u0413\u0435\u043d\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0439 \u0434\u0438\u0440\u0435\u043a\u0442\u043e\u0440"
+    signer_name = proposal.signer.name if proposal.signer else "\u0412.\u041e. \u0413\u0430\u043b\u0443\u0441\u0442\u044f\u043d"
     delivery_unit = "\u0440\u0430\u0431\u043e\u0447\u0438\u0445 \u0434\u043d\u0435\u0439" if proposal.delivery_term_unit == "working_days" else "\u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u043d\u044b\u0445 \u0434\u043d\u0435\u0439"
     delivery_term = f"{proposal.delivery_term_value} {delivery_unit}" if proposal.delivery_term_value else ""
     optional_conditions = []
@@ -99,8 +102,8 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         "vat_amount": format_money(proposal.vat_amount),
         "total_amount_words": proposal.total_amount_words,
         "vat_amount_words": proposal.vat_amount_words,
-        "signer_title": "\u0413\u0435\u043d\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0439 \u0434\u0438\u0440\u0435\u043a\u0442\u043e\u0440",
-        "signer_name": "\u0412.\u041e. \u0413\u0430\u043b\u0443\u0441\u0442\u044f\u043d",
+        "signer_title": signer_title,
+        "signer_name": signer_name,
     }
 
 
@@ -162,6 +165,20 @@ def _paragraph_contains_placeholder(paragraph, key: str) -> bool:
 def _remove_paragraph(paragraph) -> None:
     element = paragraph._element
     element.getparent().remove(element)
+
+
+def _remove_table_row(row: _Row) -> None:
+    row._tr.getparent().remove(row._tr)
+
+
+def _remove_object_description_heading(doc: Document) -> None:
+    for paragraph in list(doc.paragraphs):
+        if OBJECT_DESCRIPTION_HEADING in paragraph.text:
+            _remove_paragraph(paragraph)
+    for table in doc.tables:
+        for row in list(table.rows):
+            if any(OBJECT_DESCRIPTION_HEADING in cell.text for cell in row.cells):
+                _remove_table_row(row)
 
 
 def _remove_empty_block_placeholders(doc: Document, context: dict[str, str]) -> None:
@@ -258,6 +275,7 @@ def render_docx(proposal: Proposal, template_path: Path, preview: bool = False) 
     doc = Document(str(template_path))
     context = proposal_context(proposal)
     _replace_items_table(doc, proposal)
+    _remove_object_description_heading(doc)
     _remove_empty_block_placeholders(doc, context)
     _replace_everywhere(doc, context)
     _force_body_times_new_roman(doc)

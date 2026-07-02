@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
-from app.models import AuditAction, AuditLog, Proposal, ProposalItem, RequestType, Template, TemplateVersion, User, UserRole
+from app.models import AuditAction, AuditLog, Proposal, ProposalItem, RequestType, Signer, Template, TemplateVersion, User, UserRole
 from app.schemas import ProposalIn
 from app.services.document import DEFAULT_SPECIFICATION_TEXT, default_intro_text, is_auto_intro_text
 from app.services.money import (
@@ -35,12 +35,23 @@ def latest_template_version(db: Session, template_id: int) -> TemplateVersion:
     return version
 
 
+def proposal_signer_id(db: Session, template_id: int, signer_id: int | None) -> int | None:
+    if signer_id is not None:
+        signer = db.get(Signer, signer_id)
+        if signer is None or not signer.is_active:
+            raise HTTPException(status_code=404, detail="Подписант не найден")
+        return signer.id
+    template = db.get(Template, template_id)
+    return template.default_signer_id if template and template.default_signer_id else None
+
+
 def get_proposal_for_user(db: Session, proposal_id: int, user: User) -> Proposal:
     proposal = db.scalar(
         select(Proposal)
         .options(
             selectinload(Proposal.items),
             selectinload(Proposal.template_version).selectinload(TemplateVersion.template),
+            selectinload(Proposal.signer),
         )
         .where(Proposal.id == proposal_id)
     )
@@ -66,6 +77,7 @@ def fill_proposal(proposal: Proposal, data: ProposalIn, db: Session, keep_templa
         version = latest_template_version(db, data.template_id)
         proposal.template_version_id = version.id
     proposal.template_id = data.template_id
+    proposal.signer_id = proposal_signer_id(db, data.template_id, data.signer_id)
     proposal.recipient_name = data.recipient_name.strip()
     proposal.recipient_inn = data.recipient_inn
     proposal.recipient_email = data.recipient_email
@@ -140,6 +152,7 @@ def duplicate_proposal(db: Session, proposal: Proposal, user: User) -> Proposal:
         user_id=user.id,
         template_id=proposal.template_id,
         template_version_id=proposal.template_version_id,
+        signer_id=proposal.signer_id,
         recipient_name=proposal.recipient_name,
         recipient_inn=proposal.recipient_inn,
         recipient_email=proposal.recipient_email,

@@ -2,6 +2,8 @@ const state = {
   token: localStorage.getItem("cp_token"),
   user: null,
   templates: [],
+  signers: [],
+  adminSigners: [],
   proposals: [],
   currentProposal: null,
   pdfObjectUrl: null,
@@ -240,7 +242,7 @@ async function bootstrap() {
   try {
     state.user = await api("/api/auth/me");
     showAuthed();
-    await Promise.all([loadTemplates(), loadProposals()]);
+    await Promise.all([loadTemplates(), loadSigners(), loadProposals()]);
     if (state.user.role === "admin") await loadAdmin();
     switchView("proposals");
   } catch {
@@ -254,6 +256,37 @@ async function bootstrap() {
 async function loadTemplates() {
   state.templates = await api("/api/templates");
   $("templateId").innerHTML = state.templates.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+  syncSignerToTemplate(!state.currentProposal);
+}
+
+function signerLabel(signer) {
+  return [signer.title, signer.name].filter(Boolean).join(" - ");
+}
+
+function renderSignerSelects() {
+  const options = state.signers.map((signer) => `<option value="${signer.id}">${escapeHtml(signerLabel(signer))}</option>`).join("");
+  $("signerId").innerHTML = options;
+  if ($("templateSignerId")) $("templateSignerId").innerHTML = options;
+  syncSignerToTemplate(!state.currentProposal);
+}
+
+async function loadSigners() {
+  state.signers = await api("/api/signers");
+  renderSignerSelects();
+}
+
+function selectedTemplate() {
+  return state.templates.find((template) => template.id === Number($("templateId").value));
+}
+
+function templateDefaultSignerId() {
+  return selectedTemplate()?.default_signer_id || state.signers[0]?.id || "";
+}
+
+function syncSignerToTemplate(force = false) {
+  if (!$("signerId")) return;
+  const defaultSignerId = templateDefaultSignerId();
+  if (force || !$("signerId").value) $("signerId").value = defaultSignerId;
 }
 
 async function loadProposals() {
@@ -295,6 +328,7 @@ function resetForm() {
   state.currentProposal = null;
   $("editorMode").textContent = "Новое КП";
   $("proposalForm").reset();
+  syncSignerToTemplate(true);
   $("quoteDate").value = todayIso();
   $("validUntil").value = addOneMonthIso(todayIso());
   $("deliveryTermValue").value = "";
@@ -318,6 +352,7 @@ function fillForm(p) {
   state.currentProposal = p;
   $("editorMode").textContent = `КП №${p.id}`;
   $("templateId").value = p.template_id;
+  $("signerId").value = p.signer_id || templateDefaultSignerId() || "";
   $("recipientName").value = p.recipient_name;
   $("recipientInn").value = p.recipient_inn || "";
   $("recipientEmail").value = p.recipient_email || "";
@@ -426,6 +461,7 @@ function collectPayload() {
   const recipientEmail = $("recipientEmail").value.trim();
   return {
     template_id: Number($("templateId").value),
+    signer_id: Number($("signerId").value) || null,
     recipient_name: $("recipientName").value,
     recipient_inn: recipientInn || null,
     recipient_email: recipientEmail || null,
@@ -528,7 +564,10 @@ async function generateFinal() {
 }
 
 async function loadAdmin() {
-  const [users, allowedEmails] = await Promise.all([api("/api/admin/users"), api("/api/admin/allowed-emails")]);
+  const [users, allowedEmails, adminSigners] = await Promise.all([api("/api/admin/users"), api("/api/admin/allowed-emails"), api("/api/admin/signers")]);
+  state.adminSigners = adminSigners;
+  state.signers = adminSigners.filter((signer) => signer.is_active);
+  renderSignerSelects();
   $("usersList").innerHTML = users
     .map(
       (user) => `
@@ -553,8 +592,22 @@ async function loadAdmin() {
         .join("")
     : `<div class="admin-note">Пока нет разрешенных email.</div>`;
   $("templateList").innerHTML = state.templates
-    .map((template) => `<div class="admin-row"><span>${escapeHtml(template.name)}<br><small>${escapeHtml(template.organization)}</small></span><strong>v${template.latest_version_id || "—"}</strong></div>`)
+    .map((template) => {
+      const signer = adminSigners.find((item) => item.id === template.default_signer_id);
+      return `<div class="admin-row"><span>${escapeHtml(template.name)}<br><small>${escapeHtml(template.organization)}${signer ? ` · ${escapeHtml(signerLabel(signer))}` : ""}</small></span><strong>v${template.latest_version_id || "—"}</strong></div>`;
+    })
     .join("");
+  $("signersList").innerHTML = adminSigners.length
+    ? adminSigners
+        .map(
+          (signer) => `
+        <div class="admin-row">
+          <span>${escapeHtml(signer.name)}<br><small>${escapeHtml(signer.title)} · ${signer.is_active ? "активен" : "выключен"}</small></span>
+          <button class="secondary" onclick="toggleSigner(${signer.id})">${signer.is_active ? "Выключить" : "Включить"}</button>
+        </div>`
+        )
+        .join("")
+    : `<div class="admin-note">Пока нет подписантов.</div>`;
 }
 
 window.toggleBlock = async (id, status) => {
@@ -577,6 +630,16 @@ window.toggleRole = async (id, role) => {
   await api(`/api/admin/users/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ role: role === "admin" ? "manager" : "admin" }),
+  });
+  await loadAdmin();
+};
+
+window.toggleSigner = async (id) => {
+  const signer = state.adminSigners.find((item) => item.id === id);
+  if (!signer) return;
+  await api(`/api/admin/signers/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title: signer.title, name: signer.name, is_active: !signer.is_active }),
   });
   await loadAdmin();
 };
@@ -650,6 +713,7 @@ document.addEventListener("DOMContentLoaded", () => {
     toast("КП удалено");
   });
   $("requestType").addEventListener("change", toggleRequestFields);
+  $("templateId").addEventListener("change", () => syncSignerToTemplate(true));
   $("recipientInn").addEventListener("input", () => keepDigitsOnly($("recipientInn"), 12));
   ["requestNumber", "requestDate"].forEach((id) => $(id).addEventListener("input", () => syncIntroText(false)));
   $("introText").addEventListener("input", () => {
@@ -669,12 +733,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const data = new FormData();
     data.append("name", $("templateName").value);
     data.append("organization", $("templateOrg").value);
+    if ($("templateSignerId").value) data.append("default_signer_id", $("templateSignerId").value);
     data.append("file", file);
     await api("/api/admin/templates", { method: "POST", body: data, headers: {} });
     $("templateFile").value = "";
     await loadTemplates();
     await loadAdmin();
     toast("Шаблон загружен");
+  });
+  $("signerForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await api("/api/admin/signers", {
+      method: "POST",
+      body: JSON.stringify({
+        title: $("signerTitle").value,
+        name: $("signerName").value,
+        is_active: $("signerActive").checked,
+      }),
+    });
+    $("signerName").value = "";
+    $("signerActive").checked = true;
+    await loadAdmin();
+    toast("Подписант добавлен");
   });
   $("allowedEmailForm").addEventListener("submit", async (event) => {
     event.preventDefault();

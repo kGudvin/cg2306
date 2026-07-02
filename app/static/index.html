@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Генератор КП</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -82,6 +83,8 @@
                 <legend>Шаблон</legend>
                 <label>Шаблон</label>
                 <select id="templateId"></select>
+                <label>Подписант</label>
+                <select id="signerId"></select>
               </fieldset>
 
               <fieldset>
@@ -209,10 +212,24 @@
               <form id="templateUploadForm">
                 <label>Название шаблона<input id="templateName" value="КП ООО «Бештау Электроникс»" /></label>
                 <label>Организация<input id="templateOrg" value="ООО «Бештау Электроникс»" /></label>
+                <label>Подписант по умолчанию<select id="templateSignerId"></select></label>
                 <label>DOCX-шаблон<input id="templateFile" type="file" accept=".docx" /></label>
                 <button>Загрузить шаблон</button>
               </form>
               <div id="templateList"></div>
+            </section>
+            <section class="admin-panel">
+              <h3>Подписанты</h3>
+              <form id="signerForm">
+                <label>Должность<input id="signerTitle" value="Генеральный директор" required /></label>
+                <label>ФИО<input id="signerName" placeholder="И.О. Фамилия" required /></label>
+                <label class="checkbox-row">
+                  <input id="signerActive" type="checkbox" checked />
+                  <span>Активен</span>
+                </label>
+                <button>Добавить подписанта</button>
+              </form>
+              <div id="signersList"></div>
             </section>
             <section class="admin-panel">
               <h3>Реестр товаров</h3>

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.models import AllowedEmail, AuditAction, AuditLog, Proposal, RegistryProduct, Template, TemplateVersion, User, UserRole, UserStatus
+from app.models import AllowedEmail, AuditAction, AuditLog, Proposal, RegistryProduct, Signer, Template, TemplateVersion, User, UserRole, UserStatus
 from app.schemas import (
     AllowedEmailIn,
     AllowedEmailRead,
@@ -20,6 +20,8 @@ from app.schemas import (
     RegisterRequest,
     RegistryImportResult,
     RegistryProductRead,
+    SignerIn,
+    SignerRead,
     TemplateRead,
     TokenResponse,
     UserRead,
@@ -57,6 +59,14 @@ def apply_schema_compatibility() -> None:
         if "recipient_email" not in proposal_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE proposals ADD COLUMN recipient_email VARCHAR(255)"))
+        if "signer_id" not in proposal_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE proposals ADD COLUMN signer_id INTEGER"))
+    if inspector.has_table("templates"):
+        template_columns = {column["name"] for column in inspector.get_columns("templates")}
+        if "default_signer_id" not in template_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE templates ADD COLUMN default_signer_id INTEGER"))
     if inspector.has_table("proposal_items"):
         item_columns = {column["name"] for column in inspector.get_columns("proposal_items")}
         with engine.begin() as connection:
@@ -110,11 +120,23 @@ def seed_initial_data(db: Session) -> None:
             )
         )
 
+    signer = db.scalar(select(Signer).where(Signer.name == "В.О. Галустян"))
+    if signer is None:
+        signer = Signer(title="Генеральный директор", name="В.О. Галустян", is_active=True)
+        db.add(signer)
+        db.flush()
+
     template = db.scalar(select(Template).where(Template.name == "КП ООО «Бештау Электроникс»"))
     if template is None:
-        template = Template(name="КП ООО «Бештау Электроникс»", organization="ООО «Бештау Электроникс»")
+        template = Template(
+            name="КП ООО «Бештау Электроникс»",
+            organization="ООО «Бештау Электроникс»",
+            default_signer_id=signer.id,
+        )
         db.add(template)
         db.flush()
+    elif template.default_signer_id is None:
+        template.default_signer_id = signer.id
     version = db.scalar(select(TemplateVersion).where(TemplateVersion.template_id == template.id))
     if version is None:
         path = settings.templates_dir / "beshtau_prepared_v1.docx"
@@ -183,23 +205,32 @@ def list_templates(db: Session = Depends(get_db), user: User = Depends(get_curre
                 name=template.name,
                 organization=template.organization,
                 is_active=template.is_active,
+                default_signer_id=template.default_signer_id,
                 latest_version_id=latest.id if latest else None,
             )
         )
     return result
 
 
+@app.get("/api/signers", response_model=list[SignerRead])
+def list_signers(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[Signer]:
+    return db.scalars(select(Signer).where(Signer.is_active.is_(True)).order_by(Signer.name)).all()
+
+
 @app.post("/api/admin/templates", response_model=TemplateRead)
 def upload_template(
     name: str = Form(...),
     organization: str = Form(...),
+    default_signer_id: int | None = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> TemplateRead:
     if not file.filename or not file.filename.lower().endswith(".docx"):
         raise HTTPException(status_code=400, detail="Можно загрузить только DOCX")
-    template = Template(name=name, organization=organization)
+    if default_signer_id is not None and db.get(Signer, default_signer_id) is None:
+        raise HTTPException(status_code=404, detail="Подписант не найден")
+    template = Template(name=name, organization=organization, default_signer_id=default_signer_id)
     db.add(template)
     db.flush()
     path = settings.templates_dir / f"template_{template.id}_v1.docx"
@@ -209,7 +240,14 @@ def upload_template(
     db.add(version)
     db.add(AuditLog(user_id=user.id, action=AuditAction.template_uploaded, entity_type="template", entity_id=template.id))
     db.commit()
-    return TemplateRead(id=template.id, name=template.name, organization=template.organization, is_active=True, latest_version_id=version.id)
+    return TemplateRead(
+        id=template.id,
+        name=template.name,
+        organization=template.organization,
+        is_active=True,
+        default_signer_id=template.default_signer_id,
+        latest_version_id=version.id,
+    )
 
 
 @app.post("/api/admin/registry-products/import", response_model=RegistryImportResult)
@@ -245,7 +283,7 @@ def get_registry_product_by_number(
 
 @app.get("/api/proposals", response_model=list[ProposalRead])
 def list_proposals(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[ProposalRead]:
-    query = select(Proposal).options(selectinload(Proposal.items)).order_by(Proposal.updated_at.desc())
+    query = select(Proposal).options(selectinload(Proposal.items), selectinload(Proposal.signer)).order_by(Proposal.updated_at.desc())
     if user.role != UserRole.admin:
         query = query.where(Proposal.user_id == user.id)
     return [proposal_read(item) for item in db.scalars(query).all()]
@@ -343,6 +381,37 @@ def upsert_allowed_email(payload: AllowedEmailIn, db: Session = Depends(get_db),
     db.commit()
     db.refresh(item)
     return item
+
+
+@app.get("/api/admin/signers", response_model=list[SignerRead])
+def list_admin_signers(db: Session = Depends(get_db), user: User = Depends(require_admin)) -> list[Signer]:
+    return db.scalars(select(Signer).order_by(Signer.name)).all()
+
+
+@app.post("/api/admin/signers", response_model=SignerRead)
+def create_signer(payload: SignerIn, db: Session = Depends(get_db), user: User = Depends(require_admin)) -> Signer:
+    signer = Signer(title=payload.title.strip(), name=payload.name.strip(), is_active=payload.is_active)
+    if not signer.title or not signer.name:
+        raise HTTPException(status_code=400, detail="Укажите должность и ФИО подписанта")
+    db.add(signer)
+    db.commit()
+    db.refresh(signer)
+    return signer
+
+
+@app.patch("/api/admin/signers/{signer_id}", response_model=SignerRead)
+def update_signer(signer_id: int, payload: SignerIn, db: Session = Depends(get_db), user: User = Depends(require_admin)) -> Signer:
+    signer = db.get(Signer, signer_id)
+    if signer is None:
+        raise HTTPException(status_code=404, detail="Подписант не найден")
+    signer.title = payload.title.strip()
+    signer.name = payload.name.strip()
+    signer.is_active = payload.is_active
+    if not signer.title or not signer.name:
+        raise HTTPException(status_code=400, detail="Укажите должность и ФИО подписанта")
+    db.commit()
+    db.refresh(signer)
+    return signer
 
 
 @app.get("/api/admin/users", response_model=list[UserRead])

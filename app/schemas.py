@@ -65,11 +65,25 @@ class AllowedEmailRead(AllowedEmailIn):
     created_at: datetime
 
 
+class SignerIn(BaseModel):
+    title: str
+    name: str
+    is_active: bool = True
+
+
+class SignerRead(SignerIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+
+
 class TemplateRead(BaseModel):
     id: int
     name: str
     organization: str
     is_active: bool
+    default_signer_id: int | None = None
     latest_version_id: int | None = None
 
 
@@ -93,6 +107,7 @@ class ProposalItemRead(ProposalItemIn):
 
 class ProposalIn(BaseModel):
     template_id: int
+    signer_id: int | None = None
     recipient_name: str
     recipient_inn: str | None = None
     recipient_email: str | None = None
@@ -144,6 +159,7 @@ class ProposalRead(BaseModel):
     user_id: int
     template_id: int
     template_version_id: int
+    signer_id: int | None
     recipient_name: str
     recipient_inn: str | None
     recipient_email: str | None
