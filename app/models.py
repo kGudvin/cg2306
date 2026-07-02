@@ -14,6 +14,7 @@ class UserRole(str, enum.Enum):
 
 
 class UserStatus(str, enum.Enum):
+    pending = "pending"
     active = "active"
     blocked = "blocked"
 
@@ -39,6 +40,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.manager)
     status: Mapped[UserStatus] = mapped_column(Enum(UserStatus), default=UserStatus.active)

@@ -346,3 +346,128 @@ textarea { resize: vertical; }
   .two, .three { grid-template-columns: 1fr; }
   .login-panel { padding: 20px; }
 }
+
+/* kGudvin unified dark UI */
+:root {
+  --bg: #050812;
+  --panel: rgba(16, 24, 39, .90);
+  --line: rgba(176, 191, 215, .16);
+  --text: #f7f9ff;
+  --muted: #a8b4c7;
+  --accent: #36c2a6;
+  --accent-dark: #69e6c7;
+  --danger: #fecdd3;
+  --warn: #f0b64d;
+  --soft: rgba(54, 194, 166, .12);
+}
+
+body {
+  background:
+    linear-gradient(135deg, rgba(54, 194, 166, .10), transparent 34%),
+    linear-gradient(225deg, rgba(106, 168, 255, .09), transparent 32%),
+    linear-gradient(180deg, #050812 0%, #080d19 52%, #0b1020 100%);
+  color: var(--text);
+}
+
+.sidebar {
+  background: #0d1424;
+  border-right: 1px solid var(--line);
+}
+
+.brand-mark {
+  background: #020716;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  color: #fff;
+}
+
+.workspace { color: var(--text); }
+.view-head h2, .login-panel h1, .proposal-card h3 { color: var(--text); }
+
+.login-panel,
+.form-panel,
+.preview-panel,
+.admin-panel,
+.proposal-card,
+fieldset,
+.table-wrap {
+  background: var(--panel);
+  border-color: var(--line);
+  box-shadow: 0 18px 54px rgba(0,0,0,.24);
+}
+
+input,
+textarea,
+select {
+  background: #0d1424;
+  border-color: rgba(176, 191, 215, .18);
+  color: var(--text);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(105, 230, 199, .70);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(54, 194, 166, .16);
+}
+
+select option {
+  background: #0d1424;
+  color: var(--text);
+}
+
+button,
+.download {
+  border: 1px solid rgba(105, 230, 199, .48);
+  background: #36c2a6;
+  color: #06111f;
+  font-weight: 700;
+}
+
+button:hover,
+.download:hover {
+  background: #69e6c7;
+}
+
+.secondary,
+.ghost,
+.nav {
+  border-color: rgba(176, 191, 215, .16);
+  background: rgba(16, 24, 39, .84);
+  color: var(--text);
+}
+
+.secondary:hover,
+.ghost:hover,
+.nav.active,
+.nav:hover {
+  background: rgba(21, 31, 49, .96);
+  border-color: rgba(105, 230, 199, .34);
+}
+
+.danger {
+  border-color: rgba(248, 113, 113, .30);
+  background: rgba(127, 29, 29, .32);
+  color: #fecdd3;
+}
+
+.items-table th {
+  background: #151f31;
+  color: var(--muted);
+}
+
+.items-table th,
+.items-table td,
+.proposal-card,
+.proposal-meta,
+fieldset,
+legend,
+label,
+.muted {
+  border-color: var(--line);
+}
+
+.error { color: #fecdd3; }
+.warning { color: var(--warn); }
+.eyebrow { color: #69e6c7; }

@@ -7,6 +7,7 @@ const state = {
   pdfObjectUrl: null,
   introTextEdited: false,
   lastAutoIntroText: "",
+  authMode: "login",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -221,31 +222,19 @@ function showLogin() {
   $("app").classList.add("hidden");
 }
 
-async function initAuth() {
-  const config = await fetch("/api/config").then((r) => r.json());
-  if (config.google_client_id && window.google) {
-    google.accounts.id.initialize({
-      client_id: config.google_client_id,
-      callback: async ({ credential }) => {
-        try {
-          const result = await api("/api/auth/google", { method: "POST", body: JSON.stringify({ credential }) });
-          state.token = result.access_token;
-          localStorage.setItem("cp_token", state.token);
-          await bootstrap();
-        } catch (error) {
-          $("loginError").textContent = error.message;
-        }
-      },
-    });
-    google.accounts.id.renderButton($("googleButton"), { theme: "outline", size: "large", text: "signin_with", locale: "ru" });
-  }
-  $("devLoginForm").classList.toggle("hidden", !config.dev_login_enabled);
+function setAuthMode(mode) {
+  state.authMode = mode;
+  $("fullNameLabel").classList.toggle("hidden", mode !== "register");
+  $("authPassword").minLength = mode === "register" ? 8 : 1;
+  $("authSubmit").textContent = mode === "register" ? "Отправить заявку" : "Войти";
+  $("loginModeBtn").classList.toggle("active", mode === "login");
+  $("registerModeBtn").classList.toggle("active", mode === "register");
+  $("loginError").textContent = "";
 }
 
 async function bootstrap() {
   if (!state.token) {
     showLogin();
-    await initAuth();
     return;
   }
   try {
@@ -539,19 +528,30 @@ async function generateFinal() {
 }
 
 async function loadAdmin() {
-  const [allowed, users] = await Promise.all([api("/api/admin/allowed-emails"), api("/api/admin/users")]);
-  $("allowedList").innerHTML = allowed
-    .map((item) => `<div class="admin-row"><span>${escapeHtml(item.email)}</span><strong>${item.role}</strong></div>`)
-    .join("");
+  const [users, allowedEmails] = await Promise.all([api("/api/admin/users"), api("/api/admin/allowed-emails")]);
   $("usersList").innerHTML = users
     .map(
       (user) => `
       <div class="admin-row">
-        <span>${escapeHtml(user.email)}<br><small>${user.status}</small></span>
-        <button class="secondary" onclick="toggleBlock(${user.id}, '${user.status}')">${user.status === "blocked" ? "Разблокировать" : "Блокировать"}</button>
+        <span>${escapeHtml(user.email)}<br><small>${user.status} · ${user.role}</small></span>
+        <span class="inline">
+          ${user.status === "pending" ? `<button class="secondary" onclick="approveUser(${user.id})">Одобрить</button>` : ""}
+          <button class="secondary" onclick="toggleBlock(${user.id}, '${user.status}')">${user.status === "blocked" ? "Разблокировать" : "Блокировать"}</button>
+          <button class="secondary" onclick="toggleRole(${user.id}, '${user.role}')">${user.role === "admin" ? "Сделать менеджером" : "Сделать админом"}</button>
+        </span>
       </div>`
     )
     .join("");
+  $("allowedEmailsList").innerHTML = allowedEmails.length
+    ? allowedEmails
+        .map(
+          (item) => `
+        <div class="admin-row">
+          <span>${escapeHtml(item.email)}<br><small>${item.role} · ${item.is_active ? "активен" : "выключен"}</small></span>
+        </div>`
+        )
+        .join("")
+    : `<div class="admin-note">Пока нет разрешенных email.</div>`;
   $("templateList").innerHTML = state.templates
     .map((template) => `<div class="admin-row"><span>${escapeHtml(template.name)}<br><small>${escapeHtml(template.organization)}</small></span><strong>v${template.latest_version_id || "—"}</strong></div>`)
     .join("");
@@ -565,18 +565,48 @@ window.toggleBlock = async (id, status) => {
   await loadAdmin();
 };
 
+window.approveUser = async (id) => {
+  await api(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "active" }),
+  });
+  await loadAdmin();
+};
+
+window.toggleRole = async (id, role) => {
+  await api(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ role: role === "admin" ? "manager" : "admin" }),
+  });
+  await loadAdmin();
+};
+
 document.addEventListener("DOMContentLoaded", () => {
+  setAuthMode("login");
+  $("loginModeBtn").addEventListener("click", () => setAuthMode("login"));
+  $("registerModeBtn").addEventListener("click", () => setAuthMode("register"));
   document.querySelectorAll(".nav").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
   $("logoutBtn").addEventListener("click", () => {
     localStorage.removeItem("cp_token");
     location.reload();
   });
-  $("devLoginForm").addEventListener("submit", async (event) => {
+  $("authForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
-      const result = await api("/api/auth/dev-login", {
+      $("loginError").textContent = "";
+      if (state.authMode === "register") {
+        await api("/api/auth/register", {
+          method: "POST",
+          body: JSON.stringify({ email: $("authEmail").value, password: $("authPassword").value, full_name: $("authFullName").value || null }),
+        });
+        $("authPassword").value = "";
+        setAuthMode("login");
+        $("loginError").textContent = "Заявка создана. Войти можно после одобрения администратором.";
+        return;
+      }
+      const result = await api("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email: $("devEmail").value }),
+        body: JSON.stringify({ email: $("authEmail").value, password: $("authPassword").value }),
       });
       state.token = result.access_token;
       localStorage.setItem("cp_token", state.token);
@@ -629,15 +659,6 @@ document.addEventListener("DOMContentLoaded", () => {
   $("quoteDate").addEventListener("change", () => {
     if (!$("validUntil").value) $("validUntil").value = addOneMonthIso($("quoteDate").value);
   });
-  $("allowedEmailForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    await api("/api/admin/allowed-emails", {
-      method: "POST",
-      body: JSON.stringify({ email: $("allowedEmail").value, role: $("allowedRole").value, is_active: true }),
-    });
-    $("allowedEmail").value = "";
-    await loadAdmin();
-  });
   $("templateUploadForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const file = $("templateFile").files[0];
@@ -654,6 +675,27 @@ document.addEventListener("DOMContentLoaded", () => {
     await loadTemplates();
     await loadAdmin();
     toast("Шаблон загружен");
+  });
+  $("allowedEmailForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = $("allowedEmail").value.trim();
+    if (!email) {
+      toast("Укажите email");
+      return;
+    }
+    await api("/api/admin/allowed-emails", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        role: $("allowedEmailRole").value,
+        is_active: $("allowedEmailActive").checked,
+      }),
+    });
+    $("allowedEmail").value = "";
+    $("allowedEmailRole").value = "manager";
+    $("allowedEmailActive").checked = true;
+    await loadAdmin();
+    toast("Email добавлен");
   });
   $("registryUploadForm").addEventListener("submit", async (event) => {
     event.preventDefault();

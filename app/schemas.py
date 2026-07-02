@@ -31,13 +31,15 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-class GoogleLoginRequest(BaseModel):
-    credential: str
-
-
-class DevLoginRequest(BaseModel):
+class RegisterRequest(BaseModel):
     email: str
+    password: str = Field(min_length=8)
     full_name: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 class UserRead(BaseModel):

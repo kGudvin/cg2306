@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     libreoffice_bin: str = "soffice"
     dev_login_enabled: bool = False
     seed_admin_email: str = "admin@example.com"
+    seed_admin_password: str = "change_me"
     beshtau_source_template_path: Path = Path("./КП от Кристины.docx")
     access_token_ttl_minutes: int = 60 * 12
     proposal_retention_days: int = 100

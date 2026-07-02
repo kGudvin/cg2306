@@ -9,15 +9,15 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.models import AllowedEmail, AuditAction, AuditLog, Proposal, RegistryProduct, Template, TemplateVersion, User, UserRole
+from app.models import AllowedEmail, AuditAction, AuditLog, Proposal, RegistryProduct, Template, TemplateVersion, User, UserRole, UserStatus
 from app.schemas import (
     AllowedEmailIn,
     AllowedEmailRead,
-    DevLoginRequest,
     GenerateResponse,
-    GoogleLoginRequest,
+    LoginRequest,
     ProposalIn,
     ProposalRead,
+    RegisterRequest,
     RegistryImportResult,
     RegistryProductRead,
     TemplateRead,
@@ -25,7 +25,7 @@ from app.schemas import (
     UserRead,
     UserUpdate,
 )
-from app.security import create_access_token, get_current_user, login_or_create_user, require_admin, verify_google_credential
+from app.security import create_access_token, get_current_user, hash_password, login_with_password, register_user, require_admin
 from app.services.document import generate_files, generate_preview
 from app.services.proposals import (
     create_proposal,
@@ -44,6 +44,14 @@ app = FastAPI(title=settings.app_name)
 
 def apply_schema_compatibility() -> None:
     inspector = inspect(engine)
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TYPE userstatus ADD VALUE IF NOT EXISTS 'pending'"))
+    if inspector.has_table("users"):
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "password_hash" not in user_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)"))
     if inspector.has_table("proposals"):
         proposal_columns = {column["name"] for column in inspector.get_columns("proposals")}
         if "recipient_email" not in proposal_columns:
@@ -92,6 +100,15 @@ def seed_initial_data(db: Session) -> None:
     email = settings.seed_admin_email.strip().lower()
     if email and db.scalar(select(AllowedEmail).where(AllowedEmail.email == email)) is None:
         db.add(AllowedEmail(email=email, role=UserRole.admin, is_active=True))
+    if email and db.scalar(select(User).where(User.email == email)) is None:
+        db.add(
+            User(
+                email=email,
+                password_hash=hash_password(settings.seed_admin_password),
+                role=UserRole.admin,
+                status=UserStatus.active,
+            )
+        )
 
     template = db.scalar(select(Template).where(Template.name == "КП ООО «Бештау Электроникс»"))
     if template is None:
@@ -133,24 +150,20 @@ def on_startup() -> None:
         delete_expired_proposals(db)
 
 
-@app.post("/api/auth/google", response_model=TokenResponse)
-def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    info = verify_google_credential(payload.credential)
-    user = login_or_create_user(db, info["email"], info.get("name"))
-    return TokenResponse(access_token=create_access_token(user))
+@app.post("/api/auth/register", response_model=UserRead, status_code=201)
+def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> User:
+    return register_user(db, payload.email, payload.password, payload.full_name)
 
 
-@app.post("/api/auth/dev-login", response_model=TokenResponse)
-def dev_login(payload: DevLoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    if not settings.dev_login_enabled:
-        raise HTTPException(status_code=404, detail="Dev-вход отключен")
-    user = login_or_create_user(db, payload.email, payload.full_name)
+@app.post("/api/auth/login", response_model=TokenResponse)
+def password_login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    user = login_with_password(db, payload.email, payload.password)
     return TokenResponse(access_token=create_access_token(user))
 
 
 @app.get("/api/config")
 def public_config() -> dict[str, str | bool]:
-    return {"google_client_id": settings.google_client_id, "dev_login_enabled": settings.dev_login_enabled}
+    return {"password_login_enabled": True, "registration_enabled": True}
 
 
 @app.get("/api/auth/me", response_model=UserRead)
