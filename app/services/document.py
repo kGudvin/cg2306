@@ -225,6 +225,13 @@ def _has_specification_page(proposal: Proposal) -> bool:
     return len((proposal.specification_text or "").strip()) > 10
 
 
+def _specification_page_body(proposal: Proposal) -> str:
+    text = (proposal.specification_text or "").strip()
+    if " ".join(text.split()) == " ".join(DEFAULT_SPECIFICATION_TEXT.split()):
+        return ""
+    return text
+
+
 def _add_text_with_breaks(paragraph, text: str) -> None:
     lines = text.splitlines() or [""]
     run = paragraph.add_run(lines[0])
@@ -241,17 +248,16 @@ def _append_specification_page(doc: Document, proposal: Proposal) -> None:
     section.orientation = WD_ORIENT.LANDSCAPE
     section.page_width, section.page_height = section.page_height, section.page_width
 
-    title = (
-        f'Спецификация №1 к коммерческому предложению "Исх.№ {proposal.outgoing_number} '
-        f'от {format_ru_date(proposal.quote_date)}"'
-    )
+    title = f"Спецификация №1 к коммерческому предложению Исх.№ {proposal.outgoing_number} от {format_ru_date(proposal.quote_date)}"
     title_paragraph = doc.add_paragraph()
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     _add_text_with_breaks(title_paragraph, title)
 
-    doc.add_paragraph()
-    specification_paragraph = doc.add_paragraph()
-    _add_text_with_breaks(specification_paragraph, proposal.specification_text.strip())
+    specification_text = _specification_page_body(proposal)
+    if specification_text:
+        doc.add_paragraph()
+        specification_paragraph = doc.add_paragraph()
+        _add_text_with_breaks(specification_paragraph, specification_text)
 
 
 def _row_has_item_placeholders(row: _Row) -> bool:
