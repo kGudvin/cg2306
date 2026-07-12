@@ -40,7 +40,11 @@ from app.services.proposals import (
     update_proposal,
 )
 from app.services.registry import display_name_for_registry_product, import_registry_products
-from app.template_seed import create_demo_beshtau_template, prepare_beshtau_template_from_source
+from app.template_seed import (
+    create_demo_beshtau_template,
+    prepare_beshtau_template_from_source,
+    prepare_kartas_template_from_source,
+)
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
@@ -162,6 +166,31 @@ def seed_initial_data(db: Session) -> None:
         prepare_beshtau_template_from_source(settings.beshtau_source_template_path, Path(version.file_path))
     elif version.placeholder_schema == "builtin-beshtau-v1" and Path(version.file_path).exists():
         create_demo_beshtau_template(Path(version.file_path))
+
+    kartas_template = db.scalar(select(Template).where(Template.name == "КП ООО «КАРТАС»"))
+    if kartas_template is None:
+        kartas_template = Template(name="КП ООО «КАРТАС»", organization="ООО «КАРТАС»")
+        db.add(kartas_template)
+        db.flush()
+    kartas_version = db.scalar(select(TemplateVersion).where(TemplateVersion.template_id == kartas_template.id))
+    if kartas_version is None and settings.kartas_source_template_path.exists():
+        kartas_path = settings.templates_dir / "kartas_prepared_v1.docx"
+        prepare_kartas_template_from_source(settings.kartas_source_template_path, kartas_path)
+        db.add(
+            TemplateVersion(
+                template_id=kartas_template.id,
+                version=1,
+                file_path=str(kartas_path),
+                original_filename=settings.kartas_source_template_path.name,
+                placeholder_schema="builtin-kartas-v1",
+            )
+        )
+    elif (
+        kartas_version is not None
+        and settings.kartas_source_template_path.exists()
+        and Path(kartas_version.file_path).name == "kartas_prepared_v1.docx"
+    ):
+        prepare_kartas_template_from_source(settings.kartas_source_template_path, Path(kartas_version.file_path))
     db.commit()
 
 

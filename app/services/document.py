@@ -4,12 +4,14 @@ import uuid
 from copy import deepcopy
 from datetime import date
 from pathlib import Path
+from zipfile import ZipFile
 
 from docx import Document
 from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.table import _Cell, _Row, Table
 from docx.oxml.ns import qn
+from lxml import etree
 
 from app.config import get_settings
 from app.models import Proposal
@@ -89,6 +91,7 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         "recipient_email": proposal.recipient_email or "",
         "recipient_address": proposal.recipient_address or "",
         "quote_date": format_ru_date(proposal.quote_date),
+        "quote_date_short": proposal.quote_date.strftime("%d.%m.%y"),
         "outgoing_number": proposal.outgoing_number,
         "intro_text": proposal.intro_text or default_intro_text(proposal),
         "specification_text": proposal.specification_text,
@@ -106,6 +109,17 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         "vat_amount_words": proposal.vat_amount_words,
         "signer_title": signer_title,
         "signer_name": signer_name,
+        "kartas_conditions": " ".join(
+            part
+            for part in [
+                f"Ориентировочный срок производства {delivery_term}." if delivery_term else "",
+                f"Условия оплаты: {proposal.payment_terms}." if proposal.payment_terms else "",
+                f"Условия доставки: {proposal.delivery_terms}." if proposal.delivery_terms else "",
+                f"Место поставки: {proposal.delivery_place}." if proposal.delivery_place else "",
+                f"Срок гарантии {proposal.warranty_months} мес.",
+            ]
+            if part
+        ),
     }
 
 
@@ -242,6 +256,12 @@ def _add_text_with_breaks(paragraph, text: str) -> None:
 
 
 def _append_specification_page(doc: Document, proposal: Proposal) -> None:
+    template_version = getattr(proposal, "template_version", None)
+    if (
+        getattr(template_version, "placeholder_schema", None) == "builtin-kartas-v1"
+        and " ".join((proposal.specification_text or "").split()) == " ".join(DEFAULT_SPECIFICATION_TEXT.split())
+    ):
+        return
     if not _has_specification_page(proposal):
         return
     section = doc.add_section(WD_SECTION.NEW_PAGE)
@@ -293,10 +313,55 @@ def _replace_items_table(doc: Document, proposal: Proposal) -> None:
         return
 
 
+def _replace_xml_placeholders(element, context: dict[str, str]) -> None:
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    for text_node in element.xpath(".//w:t", namespaces=namespace):
+        text = text_node.text or ""
+        for key, value in context.items():
+            text = text.replace("{{" + key + "}}", value)
+        text_node.text = text
+
+
+def _render_kartas_ooxml(proposal: Proposal, template_path: Path, output_path: Path) -> None:
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    with ZipFile(template_path, "r") as source_package:
+        root = etree.fromstring(source_package.read("word/document.xml"))
+        marker_row = next(
+            (
+                row
+                for row in root.xpath(".//w:tr", namespaces=namespace)
+                if "{{item_" in "".join(row.xpath(".//w:t/text()", namespaces=namespace))
+            ),
+            None,
+        )
+        if marker_row is None:
+            raise ValueError("В шаблоне КАРТАС не найдена строка товаров")
+
+        parent = marker_row.getparent()
+        insert_at = parent.index(marker_row)
+        for index, item in enumerate(sorted(proposal.items, key=lambda value: value.sort_order), start=1):
+            row = deepcopy(marker_row)
+            _replace_xml_placeholders(row, _row_context(item, index))
+            parent.insert(insert_at, row)
+            insert_at += 1
+        parent.remove(marker_row)
+        _replace_xml_placeholders(root, proposal_context(proposal))
+
+        patched_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True, standalone=True)
+        temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        with ZipFile(temporary_path, "w") as output_package:
+            for info in source_package.infolist():
+                content = patched_xml if info.filename == "word/document.xml" else source_package.read(info.filename)
+                output_package.writestr(info, content)
+    temporary_path.replace(output_path)
+
+
 def _output_stem(proposal: Proposal, suffix: str = "") -> str:
     proposal_date = proposal.quote_date.strftime("%d.%m.%Y")
+    template = getattr(getattr(proposal, "template_version", None), "template", None)
+    organization = getattr(template, "organization", None) or "Бештау"
     parts = [
-        "\u041a\u041f \u0411\u0435\u0448\u0442\u0430\u0443",
+        f"КП {organization}",
         sanitize_filename_part(proposal.recipient_inn or "\u0431\u0435\u0437 \u0418\u041d\u041d", max_len=20),
         sanitize_filename_part(proposal.recipient_name, max_len=80),
         proposal_date,
@@ -313,6 +378,19 @@ def _make_output_paths(proposal: Proposal, suffix: str = "") -> tuple[Path, Path
 
 
 def render_docx(proposal: Proposal, template_path: Path, preview: bool = False) -> Path:
+    template_schema = getattr(getattr(proposal, "template_version", None), "placeholder_schema", None)
+    if template_schema == "builtin-kartas-v1":
+        suffix = f"_preview_{uuid.uuid4().hex[:8]}" if preview else ""
+        docx_path, _ = _make_output_paths(proposal, suffix=suffix)
+        if preview:
+            docx_path = get_settings().previews_dir / docx_path.name
+        _render_kartas_ooxml(proposal, template_path, docx_path)
+        if _has_specification_page(proposal) and _specification_page_body(proposal):
+            doc = Document(str(docx_path))
+            _append_specification_page(doc, proposal)
+            doc.save(str(docx_path))
+        return docx_path
+
     doc = Document(str(template_path))
     context = proposal_context(proposal)
     _replace_items_table(doc, proposal)

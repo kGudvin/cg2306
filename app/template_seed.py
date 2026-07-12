@@ -1,10 +1,12 @@
 from pathlib import Path
+from zipfile import ZipFile
 
 from docx import Document
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
+from lxml import etree
 
 
 def set_times_new_roman(run) -> None:
@@ -196,3 +198,65 @@ def prepare_beshtau_template_from_source(source_path: Path, output_path: Path) -
             set_cell_text(cell, "ИТОГО" if idx < len(total_row.cells) - 1 else "{{total_amount}}")
 
     doc.save(str(output_path))
+
+
+def prepare_kartas_template_from_source(source_path: Path, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    namespace = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    ns = {"w": namespace}
+
+    def replace_text(element, value: str) -> None:
+        text_nodes = element.xpath(".//w:t", namespaces=ns)
+        if not text_nodes:
+            raise ValueError("В шаблоне КАРТАС не найден ожидаемый текстовый узел")
+        text_nodes[0].text = value
+        if value[:1].isspace() or value[-1:].isspace():
+            text_nodes[0].set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        for node in text_nodes[1:]:
+            node.text = ""
+        for break_or_tab in element.xpath(".//w:br | .//w:tab", namespaces=ns):
+            break_or_tab.getparent().remove(break_or_tab)
+
+    with ZipFile(source_path, "r") as source_package:
+        document_xml = source_package.read("word/document.xml")
+        root = etree.fromstring(document_xml)
+        body = root.find("w:body", ns)
+        if body is None:
+            raise ValueError("В шаблоне КАРТАС отсутствует тело документа")
+        paragraphs = body.findall("w:p", ns)
+        tables = body.findall("w:tbl", ns)
+        if len(paragraphs) < 7 or len(tables) < 2:
+            raise ValueError("Структура шаблона КАРТАС не соответствует ожидаемой")
+
+        replace_text(paragraphs[1], "Исх. {{outgoing_number}}")
+        replace_text(paragraphs[2], "От {{quote_date_short}}")
+        replace_text(paragraphs[5], "{{recipient_name}}")
+        replace_text(
+            paragraphs[6],
+            "{{kartas_conditions}} В случае колебания курсов валют более чем на 5% поставщик "
+            "оставляет за собой право произвести перерасчет как в большую, так и в меньшую сторону.",
+        )
+
+        rows = tables[1].findall("w:tr", ns)
+        marker_cells = rows[1].findall("w:tc", ns) if len(rows) >= 2 else []
+        if len(marker_cells) != 5:
+            raise ValueError("Таблица товаров КАРТАС не соответствует ожидаемой геометрии")
+        markers = [
+            "{{item_no}}",
+            "{{item_name}}",
+            "{{item_quantity}}",
+            "{{item_unit_price}} ₽",
+            "{{item_line_total}} ₽",
+        ]
+        for cell, marker in zip(marker_cells, markers):
+            replace_text(cell, marker)
+            for extra_paragraph in cell.findall("w:p", ns)[1:]:
+                cell.remove(extra_paragraph)
+
+        patched_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True, standalone=True)
+        temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        with ZipFile(temporary_path, "w") as output_package:
+            for info in source_package.infolist():
+                content = patched_xml if info.filename == "word/document.xml" else source_package.read(info.filename)
+                output_package.writestr(info, content)
+    temporary_path.replace(output_path)

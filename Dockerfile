@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY ["КП от Кристины.docx", "./КП от Кристины.docx"]
+COPY ["КП КАРТАС ШАБЛОН.docx", "./КП КАРТАС ШАБЛОН.docx"]
 
 RUN mkdir -p /app/storage/templates /app/storage/generated /app/storage/previews
 
