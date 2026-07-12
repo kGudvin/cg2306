@@ -11,7 +11,7 @@ from docx import Document
 from docx.enum.section import WD_ORIENT
 
 from app.template_seed import prepare_kartas_template_from_source
-from app.services.document import DEFAULT_SPECIFICATION_TEXT, _append_specification_page, _render_kartas_ooxml
+from app.services.document import DEFAULT_SPECIFICATION_TEXT, _append_specification_page, _render_branded_ooxml
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "КП КАРТАС ШАБЛОН.docx"
@@ -102,7 +102,7 @@ class KartasTemplateTest(unittest.TestCase):
             prepared = Path(tmp) / "prepared.docx"
             output = Path(tmp) / "output.docx"
             prepare_kartas_template_from_source(SOURCE, prepared)
-            _render_kartas_ooxml(self.sample_proposal(), prepared, output)
+            _render_branded_ooxml(self.sample_proposal(), prepared, output)
 
             doc = Document(output)
             self.assertIn("ООО «ПС Парт»", "\n".join(paragraph.text for paragraph in doc.paragraphs))

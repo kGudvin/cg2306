@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -260,3 +261,8 @@ def prepare_kartas_template_from_source(source_path: Path, output_path: Path) ->
                 content = patched_xml if info.filename == "word/document.xml" else source_package.read(info.filename)
                 output_package.writestr(info, content)
     temporary_path.replace(output_path)
+
+
+def prepare_nitrino_template_from_source(source_path: Path, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source_path, output_path)

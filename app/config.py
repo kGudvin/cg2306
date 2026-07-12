@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     seed_admin_password: str = "change_me"
     beshtau_source_template_path: Path = Path("./КП от Кристины.docx")
     kartas_source_template_path: Path = Path("./КП КАРТАС ШАБЛОН.docx")
+    nitrino_source_template_path: Path = Path("./НИТРИНО ШАБЛОН.docx")
     access_token_ttl_minutes: int = 60 * 12
     proposal_retention_days: int = 100
     deletion_warning_days: int = 5

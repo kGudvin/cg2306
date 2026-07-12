@@ -44,6 +44,7 @@ from app.template_seed import (
     create_demo_beshtau_template,
     prepare_beshtau_template_from_source,
     prepare_kartas_template_from_source,
+    prepare_nitrino_template_from_source,
 )
 
 settings = get_settings()
@@ -191,6 +192,42 @@ def seed_initial_data(db: Session) -> None:
         and Path(kartas_version.file_path).name == "kartas_prepared_v1.docx"
     ):
         prepare_kartas_template_from_source(settings.kartas_source_template_path, Path(kartas_version.file_path))
+
+    nitrino_signer = db.scalar(select(Signer).where(Signer.name == "Тюрин Д. А."))
+    if nitrino_signer is None:
+        nitrino_signer = Signer(title="Директор НЬЮ АЙ ТИ", name="Тюрин Д. А.", is_active=True)
+        db.add(nitrino_signer)
+        db.flush()
+    nitrino_template = db.scalar(select(Template).where(Template.name == "НИТРИНО"))
+    if nitrino_template is None:
+        nitrino_template = Template(
+            name="НИТРИНО",
+            organization="НИТРИНО",
+            default_signer_id=nitrino_signer.id,
+        )
+        db.add(nitrino_template)
+        db.flush()
+    elif nitrino_template.default_signer_id is None:
+        nitrino_template.default_signer_id = nitrino_signer.id
+    nitrino_version = db.scalar(select(TemplateVersion).where(TemplateVersion.template_id == nitrino_template.id))
+    if nitrino_version is None and settings.nitrino_source_template_path.exists():
+        nitrino_path = settings.templates_dir / "nitrino_prepared_v1.docx"
+        prepare_nitrino_template_from_source(settings.nitrino_source_template_path, nitrino_path)
+        db.add(
+            TemplateVersion(
+                template_id=nitrino_template.id,
+                version=1,
+                file_path=str(nitrino_path),
+                original_filename=settings.nitrino_source_template_path.name,
+                placeholder_schema="builtin-nitrino-v1",
+            )
+        )
+    elif (
+        nitrino_version is not None
+        and settings.nitrino_source_template_path.exists()
+        and Path(nitrino_version.file_path).name == "nitrino_prepared_v1.docx"
+    ):
+        prepare_nitrino_template_from_source(settings.nitrino_source_template_path, Path(nitrino_version.file_path))
     db.commit()
 
 

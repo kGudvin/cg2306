@@ -84,6 +84,13 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         optional_conditions.append(f"\u0423\u0441\u043b\u043e\u0432\u0438\u044f \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438: {proposal.delivery_terms}")
     if proposal.delivery_place:
         optional_conditions.append(f"\u041c\u0435\u0441\u0442\u043e \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438: {proposal.delivery_place}")
+    if proposal.request_type.value == "with_request" and proposal.request_number and proposal.request_date:
+        nitrino_intro = (
+            f"В ответ на Ваш запрос №{proposal.request_number} от {format_numeric_date(proposal.request_date)} г. "
+            "предлагаем Вам рассмотреть к поставке товар, соответствующий Вашим техническим требованиям:"
+        )
+    else:
+        nitrino_intro = "Предлагаем Вам рассмотреть к поставке товар, соответствующий Вашим техническим требованиям:"
 
     return {
         "recipient_name": recipient,
@@ -92,6 +99,7 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
         "recipient_address": proposal.recipient_address or "",
         "quote_date": format_ru_date(proposal.quote_date),
         "quote_date_short": proposal.quote_date.strftime("%d.%m.%y"),
+        "quote_date_numeric": format_numeric_date(proposal.quote_date),
         "outgoing_number": proposal.outgoing_number,
         "intro_text": proposal.intro_text or default_intro_text(proposal),
         "specification_text": proposal.specification_text,
@@ -120,6 +128,7 @@ def proposal_context(proposal: Proposal) -> dict[str, str]:
             ]
             if part
         ),
+        "nitrino_intro": nitrino_intro,
     }
 
 
@@ -258,7 +267,7 @@ def _add_text_with_breaks(paragraph, text: str) -> None:
 def _append_specification_page(doc: Document, proposal: Proposal) -> None:
     template_version = getattr(proposal, "template_version", None)
     if (
-        getattr(template_version, "placeholder_schema", None) == "builtin-kartas-v1"
+        getattr(template_version, "placeholder_schema", None) in {"builtin-kartas-v1", "builtin-nitrino-v1"}
         and " ".join((proposal.specification_text or "").split()) == " ".join(DEFAULT_SPECIFICATION_TEXT.split())
     ):
         return
@@ -315,14 +324,52 @@ def _replace_items_table(doc: Document, proposal: Proposal) -> None:
 
 def _replace_xml_placeholders(element, context: dict[str, str]) -> None:
     namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    for text_node in element.xpath(".//w:t", namespaces=namespace):
+    word_namespace = namespace["w"]
+    for text_node in list(element.xpath(".//w:t", namespaces=namespace)):
         text = text_node.text or ""
         for key, value in context.items():
             text = text.replace("{{" + key + "}}", value)
-        text_node.text = text
+        lines = text.replace("\r\n", "\n").split("\n")
+        text_node.text = lines[0]
+        if len(lines) > 1:
+            run = text_node.getparent()
+            insert_at = run.index(text_node) + 1
+            for line in lines[1:]:
+                run.insert(insert_at, etree.Element(f"{{{word_namespace}}}br"))
+                insert_at += 1
+                continuation = etree.Element(f"{{{word_namespace}}}t")
+                continuation.text = line
+                run.insert(insert_at, continuation)
+                insert_at += 1
 
 
-def _render_kartas_ooxml(proposal: Proposal, template_path: Path, output_path: Path) -> None:
+def _set_xml_text(element, value: str, namespace: dict[str, str], collapse_paragraphs: bool = False) -> None:
+    text_nodes = element.xpath(".//w:t", namespaces=namespace)
+    if not text_nodes:
+        raise ValueError("В фирменном шаблоне не найден ожидаемый текстовый узел")
+    text_nodes[0].text = value.splitlines()[0] if value.splitlines() else ""
+    for node in text_nodes[1:]:
+        node.text = ""
+    for break_or_tab in element.xpath(".//w:br | .//w:tab", namespaces=namespace):
+        break_or_tab.getparent().remove(break_or_tab)
+    lines = value.replace("\r\n", "\n").split("\n")
+    if len(lines) > 1:
+        run = text_nodes[0].getparent()
+        insert_at = run.index(text_nodes[0]) + 1
+        word_namespace = namespace["w"]
+        for line in lines[1:]:
+            run.insert(insert_at, etree.Element(f"{{{word_namespace}}}br"))
+            insert_at += 1
+            continuation = etree.Element(f"{{{word_namespace}}}t")
+            continuation.text = line
+            run.insert(insert_at, continuation)
+            insert_at += 1
+    if collapse_paragraphs:
+        for extra_paragraph in element.findall("w:p", namespace)[1:]:
+            element.remove(extra_paragraph)
+
+
+def _render_branded_ooxml(proposal: Proposal, template_path: Path, output_path: Path) -> None:
     namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
     with ZipFile(template_path, "r") as source_package:
         root = etree.fromstring(source_package.read("word/document.xml"))
@@ -335,7 +382,7 @@ def _render_kartas_ooxml(proposal: Proposal, template_path: Path, output_path: P
             None,
         )
         if marker_row is None:
-            raise ValueError("В шаблоне КАРТАС не найдена строка товаров")
+            raise ValueError("В фирменном шаблоне не найдена строка товаров")
 
         parent = marker_row.getparent()
         insert_at = parent.index(marker_row)
@@ -346,6 +393,86 @@ def _render_kartas_ooxml(proposal: Proposal, template_path: Path, output_path: P
             insert_at += 1
         parent.remove(marker_row)
         _replace_xml_placeholders(root, proposal_context(proposal))
+
+        patched_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True, standalone=True)
+        temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        with ZipFile(temporary_path, "w") as output_package:
+            for info in source_package.infolist():
+                content = patched_xml if info.filename == "word/document.xml" else source_package.read(info.filename)
+                output_package.writestr(info, content)
+    temporary_path.replace(output_path)
+
+
+def _render_nitrino_ooxml(proposal: Proposal, template_path: Path, output_path: Path) -> None:
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    context = proposal_context(proposal)
+    with ZipFile(template_path, "r") as source_package:
+        root = etree.fromstring(source_package.read("word/document.xml"))
+        body = root.find("w:body", namespace)
+        if body is None:
+            raise ValueError("В шаблоне НИТРИНО отсутствует тело документа")
+        paragraphs = body.findall("w:p", namespace)
+        tables = body.findall("w:tbl", namespace)
+        if len(paragraphs) < 4 or len(tables) < 3:
+            raise ValueError("Структура шаблона НИТРИНО не соответствует ожидаемой")
+
+        metadata_cells = tables[0].findall("w:tr", namespace)[0].findall("w:tc", namespace)
+        _set_xml_text(
+            metadata_cells[0],
+            f"Исх: № {proposal.outgoing_number} от {context['quote_date_numeric']} г.",
+            namespace,
+        )
+        _set_xml_text(metadata_cells[1], context["recipient_name"], namespace)
+        _set_xml_text(paragraphs[3], context["nitrino_intro"], namespace)
+
+        goods_rows = tables[1].findall("w:tr", namespace)
+        if len(goods_rows) < 5 or len(goods_rows[1].findall("w:tc", namespace)) != 6:
+            raise ValueError("Таблица товаров НИТРИНО не соответствует ожидаемой геометрии")
+        source_item_rows = goods_rows[1:4]
+        total_row = goods_rows[4]
+        insert_at = tables[1].index(total_row)
+        for index, item in enumerate(sorted(proposal.items, key=lambda value: value.sort_order), start=1):
+            if index <= len(source_item_rows):
+                row = source_item_rows[index - 1]
+            else:
+                row = deepcopy(source_item_rows[-1])
+                for element in row.iter():
+                    for attribute in list(element.attrib):
+                        if attribute.endswith("}paraId") or attribute.endswith("}textId"):
+                            del element.attrib[attribute]
+                tables[1].insert(insert_at, row)
+                insert_at += 1
+            row_context = _row_context(item, index)
+            values = [
+                row_context["item_no"],
+                row_context["item_name"],
+                row_context["item_unit"],
+                row_context["item_quantity"],
+                row_context["item_unit_price"],
+                row_context["item_line_total"],
+            ]
+            for cell, value in zip(row.findall("w:tc", namespace), values):
+                _set_xml_text(cell, value, namespace, collapse_paragraphs=True)
+        for unused_row in source_item_rows[len(proposal.items) :]:
+            tables[1].remove(unused_row)
+        _set_xml_text(total_row.findall("w:tc", namespace)[1], context["total_amount"], namespace)
+
+        summary_rows = tables[2].findall("w:tr", namespace)
+        total_summary = (
+            f"{context['total_amount']} руб., {context['total_amount_words']}, включая НДС "
+            f"({context['vat_rate']}%) в сумме {context['vat_amount']} руб., {context['vat_amount_words']}"
+        )
+        _set_xml_text(summary_rows[0].findall("w:tc", namespace)[1], total_summary, namespace)
+        _set_xml_text(
+            summary_rows[2].findall("w:tc", namespace)[1],
+            f"Коммерческое предложение действительно до {context['valid_until']}",
+            namespace,
+        )
+        _set_xml_text(
+            summary_rows[4].findall("w:tc", namespace)[1],
+            f"{context['signer_title']} {context['signer_name']}___________ м.п.",
+            namespace,
+        )
 
         patched_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True, standalone=True)
         temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
@@ -379,12 +506,15 @@ def _make_output_paths(proposal: Proposal, suffix: str = "") -> tuple[Path, Path
 
 def render_docx(proposal: Proposal, template_path: Path, preview: bool = False) -> Path:
     template_schema = getattr(getattr(proposal, "template_version", None), "placeholder_schema", None)
-    if template_schema == "builtin-kartas-v1":
+    if template_schema in {"builtin-kartas-v1", "builtin-nitrino-v1"}:
         suffix = f"_preview_{uuid.uuid4().hex[:8]}" if preview else ""
         docx_path, _ = _make_output_paths(proposal, suffix=suffix)
         if preview:
             docx_path = get_settings().previews_dir / docx_path.name
-        _render_kartas_ooxml(proposal, template_path, docx_path)
+        if template_schema == "builtin-nitrino-v1":
+            _render_nitrino_ooxml(proposal, template_path, docx_path)
+        else:
+            _render_branded_ooxml(proposal, template_path, docx_path)
         if _has_specification_page(proposal) and _specification_page_body(proposal):
             doc = Document(str(docx_path))
             _append_specification_page(doc, proposal)
