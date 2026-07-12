@@ -92,7 +92,7 @@
                 <label>Полное наименование организации</label>
                 <input id="recipientName" required />
                 <div class="two">
-                  <label>ИНН<input id="recipientInn" inputmode="numeric" maxlength="12" pattern="\d{10}|\d{12}" /></label>
+                  <label>ИНН<input id="recipientInn" inputmode="numeric" autocomplete="off" maxlength="12" pattern="\d{10}|\d{12}" /><small id="innLookupStatus" class="field-status"></small></label>
                   <label>Регистр адресата<select id="recipientUppercase"><option value="false">Как введено</option><option value="true">Заглавными буквами</option></select></label>
                 </div>
                 <label>Email</label>

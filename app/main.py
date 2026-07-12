@@ -15,6 +15,7 @@ from app.schemas import (
     AllowedEmailRead,
     GenerateResponse,
     LoginRequest,
+    OrganizationLookupRead,
     ProposalIn,
     ProposalRead,
     RegisterRequest,
@@ -29,6 +30,7 @@ from app.schemas import (
 )
 from app.security import create_access_token, get_current_user, hash_password, login_with_password, register_user, require_admin
 from app.services.document import generate_files, generate_preview
+from app.services.organizations import OrganizationLookupError, OrganizationNotFoundError, find_organization_by_inn
 from app.services.proposals import (
     create_proposal,
     delete_expired_proposals,
@@ -191,6 +193,20 @@ def public_config() -> dict[str, str | bool]:
 @app.get("/api/auth/me", response_model=UserRead)
 def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@app.get("/api/organizations/by-inn/{inn}", response_model=OrganizationLookupRead)
+def organization_by_inn(inn: str, user: User = Depends(get_current_user)) -> OrganizationLookupRead:
+    try:
+        result = find_organization_by_inn(inn, settings.dadata_api_token, settings.dadata_timeout_seconds)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OrganizationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OrganizationLookupError as exc:
+        status_code = 503 if not settings.dadata_api_token else 502
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return OrganizationLookupRead(**result)
 
 
 @app.get("/api/templates", response_model=list[TemplateRead])

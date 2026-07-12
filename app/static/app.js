@@ -10,6 +10,8 @@ const state = {
   introTextEdited: false,
   lastAutoIntroText: "",
   authMode: "login",
+  innLookupTimer: null,
+  innLookupController: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -18,6 +20,47 @@ function toast(message) {
   $("toast").textContent = message;
   $("toast").classList.remove("hidden");
   setTimeout(() => $("toast").classList.add("hidden"), 3200);
+}
+
+function setInnLookupStatus(message = "", kind = "") {
+  const status = $("innLookupStatus");
+  status.textContent = message;
+  status.classList.toggle("success", kind === "success");
+  status.classList.toggle("error", kind === "error");
+}
+
+async function lookupOrganizationByInn() {
+  const input = $("recipientInn");
+  const inn = input.value.replace(/\D/g, "");
+  input.value = inn;
+  if (![10, 12].includes(inn.length)) {
+    setInnLookupStatus(inn ? "ИНН должен содержать 10 или 12 цифр" : "", inn ? "error" : "");
+    return;
+  }
+
+  if (state.innLookupController) state.innLookupController.abort();
+  state.innLookupController = new AbortController();
+  setInnLookupStatus("Ищем организацию…");
+  try {
+    const organization = await api(`/api/organizations/by-inn/${inn}`, { signal: state.innLookupController.signal });
+    if ($("recipientInn").value !== inn) return;
+    $("recipientName").value = organization.name;
+    if (organization.address) $("recipientAddress").value = organization.address;
+    setInnLookupStatus("Организация найдена", "success");
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    setInnLookupStatus(error.message, "error");
+  }
+}
+
+function scheduleOrganizationLookup() {
+  clearTimeout(state.innLookupTimer);
+  const inn = $("recipientInn").value.replace(/\D/g, "").slice(0, 12);
+  $("recipientInn").value = inn;
+  setInnLookupStatus();
+  if ([10, 12].includes(inn.length)) {
+    state.innLookupTimer = setTimeout(lookupOrganizationByInn, 450);
+  }
 }
 
 function money(value) {
@@ -329,6 +372,7 @@ function resetForm() {
   $("editorMode").textContent = "Новое КП";
   $("proposalForm").reset();
   syncSignerToTemplate(true);
+  setInnLookupStatus();
   $("quoteDate").value = todayIso();
   $("validUntil").value = addOneMonthIso(todayIso());
   $("deliveryTermValue").value = "";
@@ -356,6 +400,7 @@ function fillForm(p) {
   $("recipientName").value = p.recipient_name;
   $("recipientInn").value = p.recipient_inn || "";
   $("recipientEmail").value = p.recipient_email || "";
+  setInnLookupStatus();
   $("recipientAddress").value = p.recipient_address || "";
   $("recipientUppercase").value = String(Boolean(p.recipient_uppercase));
   $("quoteDate").value = p.quote_date;
@@ -714,7 +759,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("requestType").addEventListener("change", toggleRequestFields);
   $("templateId").addEventListener("change", () => syncSignerToTemplate(true));
-  $("recipientInn").addEventListener("input", () => keepDigitsOnly($("recipientInn"), 12));
+  $("recipientInn").addEventListener("input", scheduleOrganizationLookup);
+  $("recipientInn").addEventListener("blur", () => {
+    clearTimeout(state.innLookupTimer);
+    if ([10, 12].includes($("recipientInn").value.length)) lookupOrganizationByInn();
+  });
   ["requestNumber", "requestDate"].forEach((id) => $(id).addEventListener("input", () => syncIntroText(false)));
   $("introText").addEventListener("input", () => {
     state.introTextEdited = !isAutoOrLegacyIntroText($("introText").value);

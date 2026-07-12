@@ -218,6 +218,15 @@ input, textarea, select {
   line-height: 1.4;
 }
 textarea { resize: vertical; }
+.field-status {
+  display: block;
+  min-height: 18px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.field-status.success { color: #237a49; }
+.field-status.error { color: #a33a32; }
 .two {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

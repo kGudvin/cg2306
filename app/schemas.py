@@ -87,6 +87,15 @@ class TemplateRead(BaseModel):
     latest_version_id: int | None = None
 
 
+class OrganizationLookupRead(BaseModel):
+    inn: str
+    name: str
+    address: str | None = None
+    kpp: str | None = None
+    ogrn: str | None = None
+    status: str | None = None
+
+
 class ProposalItemIn(BaseModel):
     name: str = ""
     registry_number: str | None = None

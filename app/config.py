@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     app_secret: str = "change-me-please"
     database_url: str = "sqlite:///./storage/app.db"
     google_client_id: str = ""
+    dadata_api_token: str = ""
+    dadata_timeout_seconds: float = 7.0
     storage_dir: Path = Path("./storage")
     libreoffice_bin: str = "soffice"
     dev_login_enabled: bool = False
