@@ -4,12 +4,17 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - cp_storage:/app/storage
     depends_on:
       - db
+    networks:
+      default:
+      web:
+        aliases:
+          - cg2306-app
 
   db:
     image: postgres:16-alpine
@@ -24,3 +29,7 @@ services:
 volumes:
   cp_storage:
   cp_postgres:
+
+networks:
+  web:
+    external: true
