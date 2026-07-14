@@ -47,6 +47,7 @@ async function lookupOrganizationByInn() {
     $("recipientName").value = organization.name;
     if (organization.address) $("recipientAddress").value = organization.address;
     setInnLookupStatus("Организация найдена", "success");
+    renderLivePreview();
   } catch (error) {
     if (error.name === "AbortError") return;
     setInnLookupStatus(error.message, "error");
@@ -177,6 +178,7 @@ async function lookupRegistryProduct(row) {
     input.value = product.registry_number;
     row.querySelector(".item-name").value = product.display_name;
     setRegistryStatus(row, "Товар найден", "ok");
+    recalc();
   } catch (error) {
     row.dataset.registryNumber = number;
     row.dataset.productName = "";
@@ -326,6 +328,10 @@ function templateDefaultSignerId() {
   return selectedTemplate()?.default_signer_id || state.signers[0]?.id || "";
 }
 
+function selectedSigner() {
+  return state.signers.find((signer) => signer.id === Number($("signerId").value));
+}
+
 function syncSignerToTemplate(force = false) {
   if (!$("signerId")) return;
   const defaultSignerId = templateDefaultSignerId();
@@ -361,6 +367,94 @@ async function loadProposals() {
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+}
+
+function previewText(value, fallback = "—") {
+  const text = String(value ?? "").trim();
+  return escapeHtml(text || fallback).replace(/\n/g, "<br>");
+}
+
+function renderLivePreview() {
+  if (!$("livePreview")) return;
+  const template = selectedTemplate();
+  const signer = selectedSigner();
+  const recipientName = $("recipientUppercase").value === "true"
+    ? $("recipientName").value.toUpperCase()
+    : $("recipientName").value;
+  const rows = [...$("itemsBody").querySelectorAll("tr")].map((row, index) => {
+    const quantity = Number(row.querySelector(".item-quantity").value || 0);
+    const unitPrice = Number(row.querySelector(".item-price").value || 0);
+    return {
+      number: index + 1,
+      name: row.querySelector(".item-name").value,
+      unit: row.querySelector(".item-unit").value || "Шт.",
+      quantity,
+      unitPrice,
+      total: money(quantity * unitPrice),
+    };
+  });
+  const total = rows.reduce((sum, item) => sum + item.total, 0);
+  const vat = money(total * 22 / 122);
+  const deliveryValue = $("deliveryTermValue").value;
+  const deliveryUnit = $("deliveryTermUnit").value === "working_days" ? "рабочих дней" : "календарных дней";
+  const conditions = [
+    deliveryValue ? `Срок поставки: ${deliveryValue} ${deliveryUnit}` : "",
+    `Гарантия: ${$("warrantyMonths").value || 0} мес.`,
+    $("paymentTerms").value ? `Условия оплаты: ${$("paymentTerms").value}` : "",
+    $("deliveryTerms").value ? `Условия доставки: ${$("deliveryTerms").value}` : "",
+    $("deliveryPlace").value ? `Место поставки: ${$("deliveryPlace").value}` : "",
+    $("validUntil").value ? `Предложение действительно до ${ruDate($("validUntil").value)}` : "",
+  ].filter(Boolean);
+  const itemRows = rows.length
+    ? rows.map((item) => `
+        <tr>
+          <td>${item.number}</td>
+          <td>${previewText(item.name, "Наименование товара")}</td>
+          <td>${previewText(item.unit)}</td>
+          <td>${item.quantity}</td>
+          <td>${formatMoney(item.unitPrice)}</td>
+          <td>${formatMoney(item.total)}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="6" class="document-preview__empty">Добавьте товар</td></tr>`;
+
+  $("livePreview").innerHTML = `
+    <div class="document-preview__header">
+      <strong>${previewText(template?.organization, "Организация")}</strong>
+      <div>
+        Исх. № ${previewText(outgoingNumber())}<br>
+        от ${previewText(ruDate($("quoteDate").value))}
+      </div>
+    </div>
+    <div class="document-preview__recipient">
+      <strong>${previewText(recipientName, "Организация-заказчик")}</strong><br>
+      ${$("recipientInn").value ? `ИНН ${previewText($("recipientInn").value)}<br>` : ""}
+      ${$("recipientEmail").value ? `${previewText($("recipientEmail").value)}<br>` : ""}
+      ${$("recipientAddress").value ? previewText($("recipientAddress").value) : ""}
+    </div>
+    <h3>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</h3>
+    <p>${previewText($("introText").value, "Заполните данные коммерческого предложения")}</p>
+    <div class="document-preview__table-wrap">
+      <table>
+        <thead><tr><th>№</th><th>Наименование</th><th>Ед.</th><th>Кол-во</th><th>Цена с НДС</th><th>Сумма</th></tr></thead>
+        <tbody>${itemRows}</tbody>
+        <tfoot><tr><th colspan="5">ИТОГО, руб., с НДС</th><th>${formatMoney(total)}</th></tr></tfoot>
+      </table>
+    </div>
+    <p><strong>В том числе НДС 22%:</strong> ${formatMoney(vat)} руб.</p>
+    <div class="document-preview__conditions">${conditions.map((condition) => `<p>${previewText(condition)}</p>`).join("")}</div>
+    <div class="document-preview__signature">
+      <strong>${previewText(signer?.title, "Должность подписанта")}</strong>
+      <strong>${previewText(signer?.name, "ФИО подписанта")}</strong>
+    </div>`;
+  $("livePreview").classList.remove("hidden");
+  $("pdfPreview").classList.add("hidden");
+  $("previewMode").textContent = "Быстрый предпросмотр · файлы не создаются";
+}
+
+function showPdfPreview() {
+  $("livePreview").classList.add("hidden");
+  $("pdfPreview").classList.remove("hidden");
+  $("previewMode").textContent = "Точный PDF-предпросмотр";
 }
 
 function defaultSpecText() {
@@ -545,6 +639,7 @@ function recalc() {
   $("totalAmount").textContent = `${formatMoney(total)} ₽`;
   $("vatAmount").textContent = `${formatMoney(vat)} ₽`;
   $("totalWords").textContent = "Сумма прописью формируется сервером при сохранении.";
+  renderLivePreview();
 }
 
 async function saveProposal() {
@@ -586,6 +681,7 @@ async function refreshPreview() {
   if (state.pdfObjectUrl) URL.revokeObjectURL(state.pdfObjectUrl);
   state.pdfObjectUrl = URL.createObjectURL(blob);
   $("pdfPreview").src = state.pdfObjectUrl;
+  showPdfPreview();
   toast("Предпросмотр обновлен");
 }
 
@@ -604,6 +700,7 @@ async function generateFinal() {
   if (state.pdfObjectUrl) URL.revokeObjectURL(state.pdfObjectUrl);
   state.pdfObjectUrl = URL.createObjectURL(blob);
   $("pdfPreview").src = state.pdfObjectUrl;
+  showPdfPreview();
   await loadProposals();
   toast("Файлы готовы");
 }
@@ -759,6 +856,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("requestType").addEventListener("change", toggleRequestFields);
   $("templateId").addEventListener("change", () => syncSignerToTemplate(true));
+  $("proposalForm").addEventListener("input", renderLivePreview);
+  $("proposalForm").addEventListener("change", renderLivePreview);
   $("recipientInn").addEventListener("input", scheduleOrganizationLookup);
   $("recipientInn").addEventListener("blur", () => {
     clearTimeout(state.innLookupTimer);

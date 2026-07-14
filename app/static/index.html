@@ -165,14 +165,16 @@
 
             <aside class="preview-panel">
               <div class="preview-actions">
-                <button id="previewBtn" disabled>Обновить предпросмотр</button>
+                <button id="previewBtn" disabled>Сформировать точный PDF</button>
                 <button id="generateBtn" disabled>Сгенерировать DOCX и PDF</button>
               </div>
               <div class="download-actions">
                 <a id="docxLink" class="download hidden">Скачать DOCX</a>
                 <a id="pdfLink" class="download hidden">Скачать PDF</a>
               </div>
-              <iframe id="pdfPreview" title="PDF-предпросмотр"></iframe>
+              <p id="previewMode" class="preview-mode">Быстрый предпросмотр · файлы не создаются</p>
+              <div id="livePreview" class="document-preview" aria-live="polite"></div>
+              <iframe id="pdfPreview" class="hidden" title="Точный PDF-предпросмотр"></iframe>
             </aside>
           </div>
         </section>
