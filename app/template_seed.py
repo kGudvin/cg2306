@@ -186,6 +186,17 @@ def prepare_beshtau_template_from_source(source_path: Path, output_path: Path) -
         optional = non_empty[7].insert_paragraph_before("{{optional_conditions}}")
         optional.style = non_empty[7].style
 
+    signature = next(
+        (
+            paragraph
+            for paragraph in reversed(doc.paragraphs)
+            if "галустян" in paragraph.text.lower()
+        ),
+        None,
+    )
+    if signature is not None:
+        set_paragraph_text(signature, "{{signer_title}}\t\t\t{{signer_name}}")
+
     if len(doc.tables) >= 2:
         goods = doc.tables[1]
         while len(goods.rows) > 3:
