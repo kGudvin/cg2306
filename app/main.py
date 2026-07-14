@@ -127,9 +127,9 @@ def seed_initial_data(db: Session) -> None:
             )
         )
 
-    signer = db.scalar(select(Signer).where(Signer.name == "В.О. Галустян"))
+    signer = db.scalar(select(Signer).where(Signer.name == "В.А. Кузнецов"))
     if signer is None:
-        signer = Signer(title="Генеральный директор", name="В.О. Галустян", is_active=True)
+        signer = Signer(title="Генеральный директор", name="В.А. Кузнецов", is_active=True)
         db.add(signer)
         db.flush()
 
@@ -142,7 +142,7 @@ def seed_initial_data(db: Session) -> None:
         )
         db.add(template)
         db.flush()
-    elif template.default_signer_id is None:
+    elif template.default_signer_id != signer.id:
         template.default_signer_id = signer.id
     version = db.scalar(select(TemplateVersion).where(TemplateVersion.template_id == template.id))
     if version is None:
