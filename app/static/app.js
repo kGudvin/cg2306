@@ -15,6 +15,7 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+const DEFAULT_TEMPLATE_NAME = "КП ООО «Бештау Электроникс»";
 
 function toast(message) {
   $("toast").textContent = message;
@@ -328,6 +329,11 @@ function templateDefaultSignerId() {
   return selectedTemplate()?.default_signer_id || state.signers[0]?.id || "";
 }
 
+function selectDefaultTemplate() {
+  const defaultTemplate = state.templates.find((template) => template.name === DEFAULT_TEMPLATE_NAME);
+  if (defaultTemplate) $("templateId").value = String(defaultTemplate.id);
+}
+
 function selectedSigner() {
   return state.signers.find((signer) => signer.id === Number($("signerId").value));
 }
@@ -465,6 +471,7 @@ function resetForm() {
   state.currentProposal = null;
   $("editorMode").textContent = "Новое КП";
   $("proposalForm").reset();
+  selectDefaultTemplate();
   syncSignerToTemplate(true);
   setInnLookupStatus();
   $("quoteDate").value = todayIso();
